@@ -1,0 +1,5 @@
+{
+  "name": "Simple Blot 24",
+  "description": "A 24-card variant of the popular card game Blot (Belote), featuring strict move validation, bidding phases, and point calculation.",
+  "requestFramePermissions": []
+}
