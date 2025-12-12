@@ -772,17 +772,13 @@ const App: React.FC = () => {
                 )}
 
                 {gameState.phase === 'BIDDING' && gameState.currentPlayerId === 'hero' && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 p-4">
-                        <div className="pointer-events-auto w-full max-w-lg">
-                            <BiddingControls 
-                                candidateCard={gameState.candidateCard!}
-                                onTake={handleTake}
-                                onPass={handlePass}
-                                bidRound={gameState.bidRound}
-                                mustPick={mustPick} 
-                            />
-                        </div>
-                    </div>
+                    <BiddingControls 
+                        candidateCard={gameState.candidateCard!}
+                        onTake={handleTake}
+                        onPass={handlePass}
+                        bidRound={gameState.bidRound}
+                        mustPick={mustPick} 
+                    />
                 )}
 
                 {gameState.phase === 'SCORING' && gameState.lastRoundBreakdown && (

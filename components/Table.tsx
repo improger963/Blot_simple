@@ -63,9 +63,7 @@ export const Table: React.FC<TableProps> = ({
   useEffect(() => {
       const currentLen = players.hero.hand.length;
       if (currentLen > prevHeroHandLength.current && (phase === 'DEALING' || phase === 'BIDDING' || phase === 'PLAYING')) {
-          // Cards added -> trigger staggered deal sound
           const count = currentLen - prevHeroHandLength.current;
-          // Stagger sounds
           for (let i = 0; i < Math.min(count, 8); i++) {
               setTimeout(() => {
                   playSound('deal', { pan: Math.random() * 0.4 - 0.2 });
@@ -144,22 +142,18 @@ export const Table: React.FC<TableProps> = ({
     >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_10%,rgba(0,0,0,0.85)_100%)] pointer-events-none z-0" />
 
+        {/* --- CENTRAL TABLE DECORATION --- */}
         <div className="absolute inset-0 flex items-center justify-center z-[1]">
              <div className="relative w-[96%] h-[65%] md:w-[85%] md:h-[75%] rounded-[100%] bg-[#1a472a] shadow-[0_25px_60px_rgba(0,0,0,0.7)] border-[12px] md:border-[16px] border-[#2d1b0e]">
                 <div className="absolute -inset-[2px] rounded-[100%] border border-white/10 pointer-events-none" />
                 <div className="absolute inset-0 rounded-[100%] shadow-[inset_0_0_80px_rgba(0,0,0,0.6)] pointer-events-none" />
                 <div className="absolute inset-3 md:inset-8 rounded-[100%] border-2 border-[#d4af37]/30 pointer-events-none shadow-[0_0_15px_rgba(212,175,55,0.1)]" />
-                <div className="absolute inset-0 opacity-30 rounded-[100%] pointer-events-none mix-blend-overlay" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E")` }} />
-                <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none mix-blend-overlay">
-                    <div className="w-32 h-32 md:w-56 md:h-56 border-8 border-[#d4af37] rotate-45 flex items-center justify-center">
-                         <div className="w-24 h-24 md:w-40 md:h-40 border-4 border-[#d4af37]" />
-                    </div>
-                </div>
              </div>
         </div>
 
         <main className="relative flex-1 w-full h-full z-[${Z_INDEX.TABLE_ZONES}]">
 
+            {/* --- LAST TRICK --- */}
             {gameState.lastTrick && gameState.lastTrick.length > 0 && (
                 <div className="absolute right-4 md:right-16 top-1/2 -translate-y-1/2 flex flex-col items-center justify-center z-[10] opacity-80 hover:opacity-100 transition-opacity">
                     <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 bg-black/30 px-2 py-1 rounded backdrop-blur-sm border border-white/5">Last Trick</div>
@@ -177,9 +171,10 @@ export const Table: React.FC<TableProps> = ({
                 </div>
             )}
 
+            {/* --- DECK & TRUMP (CENTERED) --- */}
             <div className={`
                 absolute transition-all duration-500 z-[${Z_INDEX.DECK}]
-                top-20 left-4 scale-[0.65] origin-top-left
+                top-[18%] left-4 scale-[0.75] origin-top-left
                 md:top-1/2 md:left-12 md:scale-100 md:-translate-y-1/2
             `}>
                  {deck.length > 0 && (
@@ -193,7 +188,7 @@ export const Table: React.FC<TableProps> = ({
                     </motion.div>
                  )}
 
-                 <div className="absolute top-0 left-32 flex flex-col items-center justify-center min-w-[100px]">
+                 <div className="absolute top-0 left-28 md:left-32 flex flex-col items-center justify-center min-w-[100px]">
                      {trumpSuit && (
                         <motion.div 
                             initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
@@ -215,7 +210,7 @@ export const Table: React.FC<TableProps> = ({
                      )}
 
                      {candidateCard && phase === 'BIDDING' && (
-                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative">
+                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-0">
                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/60 text-white/80 text-[10px] font-bold px-2 py-1 rounded border border-white/10 backdrop-blur-sm">Candidate</div>
                              <CardComponent card={candidateCard} disabled className="opacity-100 shadow-2xl hover:scale-105 transition-transform" />
                          </motion.div>
@@ -223,6 +218,7 @@ export const Table: React.FC<TableProps> = ({
                  </div>
             </div>
 
+            {/* --- ACTIVE TRICK --- */}
             <div className={`absolute top-1/2 left-1/2 w-0 h-0 z-[${Z_INDEX.TRICK_CARDS}]`}>
                 <AnimatePresence>
                     {currentTrick.map((tick, index) => {
@@ -243,18 +239,15 @@ export const Table: React.FC<TableProps> = ({
                                     transition: transitionConfig
                                 }}
                                 onAnimationStart={() => {
-                                    // Trigger Placement Sound
                                     if (tick.playerId === 'hero') playSound('place_hero', { pan: 0 });
-                                    else playSound('place_opp', { pan: 0 }); // Removed volume reduction
+                                    else playSound('place_opp', { pan: 0 }); 
                                 }}
                                 exit={{ 
                                     scale: 0.4, opacity: 0, x: exitX, y: exitY, 
                                     transition: { duration: 0.5, ease: "backIn" } 
                                 }} 
                                 onAnimationComplete={(definition) => {
-                                    // If this is the exit animation
                                     if (definition === 'exit' && index === 0) {
-                                         // Safely determine winner, falling back to lastTrick if currentTrick is empty during exit
                                          let winnerId = currentTrickWinnerId;
                                          if (!winnerId && gameState.lastTrick && gameState.lastTrick.length === 2 && trumpSuit) {
                                               winnerId = getWinningCard(gameState.lastTrick, trumpSuit)?.playerId;
@@ -283,23 +276,34 @@ export const Table: React.FC<TableProps> = ({
                 </AnimatePresence>
             </div>
 
-            <div className={`absolute top-[-40px] left-1/2 -translate-x-1/2 w-[120%] md:w-[800px] h-[160px] z-[${Z_INDEX.OPPONENT_CARDS}] pointer-events-none`}>
-                 <div className="relative w-full h-full">
+            {/* --- OPPONENT CARDS (COMPACT STACK) --- */}
+            <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full h-[120px] z-[${Z_INDEX.OPPONENT_CARDS}] pointer-events-none`}>
+                 <div className="relative w-full h-full flex justify-center">
                     <AnimatePresence>
                         {players.opponent.hand.map((card, i) => {
-                            const { rotate, translateX, translateY, zIndex } = calculateFanTransform(i, players.opponent.hand.length, true, isMobile);
+                            // Mobile: Compact stack. Desktop: Fan.
+                            const mobileOffset = (i - (players.opponent.hand.length - 1) / 2) * 15; // Tighter spread
+                            const { rotate, translateX, translateY, zIndex } = calculateFanTransform(i, players.opponent.hand.length, true, false);
+
                             return (
                                 <motion.div
                                     key={card.id}
                                     layout={!isMobile}
-                                    className="absolute top-8 left-1/2 origin-top-center"
+                                    className="absolute top-[-30px] md:top-8 origin-top-center"
                                     style={{ 
-                                        zIndex: zIndex, width: isMobile ? '5rem' : '7rem', transformOrigin: 'top center',
+                                        zIndex: zIndex, 
+                                        width: isMobile ? '4.5rem' : '7rem', // Smaller cards on mobile
+                                        transformOrigin: 'top center',
                                         willChange: "transform", transformStyle: "preserve-3d"
                                     }}
                                     initial={{ x: -window.innerWidth/2, y: 100, opacity: 0 }} 
-                                    animate={{ 
-                                        x: translateX - (isMobile ? 40 : 56), y: translateY,
+                                    animate={isMobile ? {
+                                        x: mobileOffset,
+                                        y: 10,
+                                        rotate: i % 2 === 0 ? 2 : -2, // Gentle messy stack
+                                        opacity: 1
+                                    } : { 
+                                        x: translateX - 56, y: translateY,
                                         rotate: rotate, opacity: 1, transition: transitionConfig
                                     }}
                                 >
@@ -317,72 +321,79 @@ export const Table: React.FC<TableProps> = ({
                  </div>
             </div>
             
+            {/* --- PLAYER HAND (MOBILE SCROLL SNAP CAROUSEL) --- */}
             {isMobile ? (
                 <div 
-                    className="absolute bottom-0 left-0 right-0 z-[${Z_INDEX.PLAYER_CARDS}] px-4 flex overflow-x-auto snap-x items-end -space-x-4 scrollbar-hide py-4 touch-pan-x" 
+                    className="fixed bottom-0 left-0 right-0 z-[${Z_INDEX.PLAYER_CARDS}] h-[180px] flex items-end overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-6 px-6"
                     style={{ 
                         WebkitOverflowScrolling: 'touch',
-                        paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))'
+                        // Add fade masks to sides
+                        maskImage: 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)',
+                        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)'
                     }}
                     ref={mobileContainerRef}
                 >
-                    <AnimatePresence>
-                        {players.hero.hand.map((card) => {
-                            const isValid = validMoves.some(v => v.id === card.id);
-                            const isMyTurn = currentPlayerId === 'hero' && phase === 'PLAYING';
-                            const isPlayable = isMyTurn && isValid && currentTrick.length < 2;
-                            const isHighlighted = highlightedCardIds.has(card.id);
-                            const isSelected = selectedMobileCardId === card.id;
+                    <div className="flex items-end pl-8 pr-8">
+                        <AnimatePresence>
+                            {players.hero.hand.map((card, index) => {
+                                const isValid = validMoves.some(v => v.id === card.id);
+                                const isMyTurn = currentPlayerId === 'hero' && phase === 'PLAYING';
+                                const isPlayable = isMyTurn && isValid && currentTrick.length < 2;
+                                const isHighlighted = highlightedCardIds.has(card.id);
+                                const isSelected = selectedMobileCardId === card.id;
 
-                            return (
-                                <div key={card.id} className="relative flex-shrink-0 snap-center pl-1" style={{ width: '85px', height: '140px', zIndex: isSelected ? 50 : 1 }}>
-                                    <AnimatePresence>
-                                        {isSelected && isPlayable && (
-                                            <motion.button
-                                                initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                                                animate={{ opacity: 1, y: -40, scale: 1 }}
-                                                exit={{ opacity: 0, y: 10, scale: 0.8 }}
-                                                className="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-xs px-4 py-2 rounded-full shadow-lg z-50 whitespace-nowrap border border-white/20"
-                                                onClick={(e) => { e.stopPropagation(); onPlayCard(card); }}
-                                            >
-                                                Tap to Play
-                                            </motion.button>
-                                        )}
-                                    </AnimatePresence>
-
-                                    <motion.div
-                                        drag={isPlayable ? "y" : false}
-                                        dragConstraints={{ top: 0, bottom: 0 }}
-                                        dragElastic={{ top: 0.2, bottom: 0.05 }}
-                                        onDragEnd={(e, info) => handleMobileDragEnd(e, info, card, isPlayable)}
-                                        animate={{
-                                            y: isSelected ? -20 : 0,
-                                            scale: isSelected ? 1.05 : 1,
-                                            zIndex: isSelected ? 50 : 1
+                                return (
+                                    <div 
+                                        key={card.id} 
+                                        className="relative flex-shrink-0 snap-center transition-all duration-200"
+                                        style={{ 
+                                            width: '85px', 
+                                            height: '120px', 
+                                            marginLeft: index === 0 ? 0 : '-35px', // Overlap
+                                            zIndex: isSelected ? 100 : index,
+                                            transform: isSelected ? 'translateY(-20px)' : 'translateY(0)'
                                         }}
-                                        onClick={(e) => { e.stopPropagation(); handleMobileCardClick(card, isPlayable); }}
-                                        className="w-full h-full"
                                     >
-                                        <CardComponent 
-                                            card={card} 
-                                            disabled={!isPlayable} 
-                                            isPlayable={isPlayable}
-                                            isInvalid={isMyTurn && !isValid}
-                                            trumpSuit={trumpSuit}
-                                            isTrump={card.suit === trumpSuit}
-                                            isWinningComboCard={isHighlighted}
-                                            isBelote={beloteIds.includes(card.id)}
-                                            hoverable={false}
+                                        {/* Action Popover */}
+                                        <AnimatePresence>
+                                            {isSelected && isPlayable && (
+                                                <motion.button
+                                                    initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                                                    animate={{ opacity: 1, y: -40, scale: 1 }}
+                                                    exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                                                    className="absolute top-0 left-1/2 -translate-x-1/2 bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-full shadow-lg z-50 whitespace-nowrap border border-white/20"
+                                                    onClick={(e) => { e.stopPropagation(); onPlayCard(card); }}
+                                                >
+                                                    Tap to Play
+                                                </motion.button>
+                                            )}
+                                        </AnimatePresence>
+
+                                        <div
+                                            onClick={(e) => { e.stopPropagation(); handleMobileCardClick(card, isPlayable); }}
                                             className="w-full h-full"
-                                        />
-                                    </motion.div>
-                                </div>
-                            );
-                        })}
-                    </AnimatePresence>
-                    <div className="flex-shrink-0 w-4 h-1"></div>
+                                        >
+                                            <CardComponent 
+                                                card={card} 
+                                                disabled={!isPlayable} 
+                                                isPlayable={isPlayable}
+                                                isInvalid={isMyTurn && !isValid}
+                                                trumpSuit={trumpSuit}
+                                                isTrump={card.suit === trumpSuit}
+                                                isWinningComboCard={isHighlighted}
+                                                isBelote={beloteIds.includes(card.id)}
+                                                hoverable={false}
+                                                className={`w-full h-full shadow-card ${isSelected ? 'ring-2 ring-white/50' : ''}`}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </AnimatePresence>
+                    </div>
                 </div>
             ) : (
+                /* DESKTOP FAN LAYOUT */
                 <div className={`absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-[900px] h-[220px] z-[${Z_INDEX.PLAYER_CARDS}] pointer-events-none`}>
                     <div className="relative w-full h-full">
                         <AnimatePresence>
@@ -440,8 +451,9 @@ export const Table: React.FC<TableProps> = ({
 
             <PlayerAvatar player={players.opponent} position="top" isActive={currentPlayerId === 'opponent'} isDealer={dealerId === 'opponent'} />
             <PlayerAvatar player={players.hero} position="bottom" isActive={currentPlayerId === 'hero'} isDealer={dealerId === 'hero'} />
+            
             <ScoreBoard heroScore={players.hero.score} oppScore={players.opponent.score} target={gameState.gameTarget} round={gameState.roundHistory.length + 1} />
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 md:hidden z-[${Z_INDEX.SCOREBOARD}]">
+            <div className="absolute top-4 left-4 md:hidden z-[${Z_INDEX.SCOREBOARD}]">
                 <MobileScorePill round={gameState.roundHistory.length + 1} target={gameState.gameTarget} />
             </div>
 
@@ -450,15 +462,14 @@ export const Table: React.FC<TableProps> = ({
             )}
         </main>
 
-        <div className="fixed bottom-0 left-0 right-0 px-4 py-2 flex justify-between items-end pointer-events-none z-[500] pb-safe">
-            <button onClick={onOpenHistory} className="pointer-events-auto bg-black/60 backdrop-blur-md text-slate-300 p-3 rounded-full border border-white/10 shadow-lg hover:bg-black/80 hover:text-white transition-colors hover:scale-105 active:scale-95 group" aria-label="Round History"><div className="group-hover:-translate-y-1 transition-transform"><Icons.History /></div></button>
-            <button onClick={onOpenChat} className="pointer-events-auto bg-black/60 backdrop-blur-md text-slate-300 p-3 rounded-full border border-white/10 shadow-lg hover:bg-black/80 hover:text-white transition-colors hover:scale-105 active:scale-95 group" aria-label="Chat & Emotes"><div className="group-hover:-translate-y-1 transition-transform"><Icons.Chat /></div></button>
-        </div>
-
+        {/* --- TOP RIGHT ACTIONS (Unified) --- */}
         <div className="absolute z-[40] flex gap-2" style={{ top: 'max(1rem, env(safe-area-inset-top))', right: 'max(1rem, env(safe-area-inset-right))' }}>
             <button onClick={onOpenRules} className="bg-slate-900/80 p-2 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors" title="Rules"><span className="font-bold text-lg w-6 h-6 flex items-center justify-center">?</span></button>
             <button onClick={onOpenSettings} className="bg-slate-900/80 p-2 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors" title="Settings"><Icons.Settings /></button>
+            <button onClick={onOpenHistory} className="bg-slate-900/80 p-2 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors" title="History"><Icons.History /></button>
+            <button onClick={onOpenChat} className="bg-slate-900/80 p-2 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors" title="Chat"><Icons.Chat /></button>
         </div>
+
     </div>
   );
 };

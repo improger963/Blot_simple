@@ -3,7 +3,7 @@ import { Howl } from 'howler';
 
 // Augmented Sound Types including specific variations
 export type SoundType = 
-    | 'deal' | 'rustle' 
+    | 'deal' | 'rustle' | 'card_flip' | 'chip_stack'
     | 'place_hero' | 'place_hero_1' | 'place_hero_2' | 'place_hero_3'
     | 'place_opp' | 'place_opp_1' | 'place_opp_2' | 'place_opp_3'
     | 'slide' | 'tick' | 'win_fanfare' | 'turn_start';
@@ -28,6 +28,9 @@ const SPRITES: Record<string, [number, number]> = {
     tick:         [4800, 100], // 4.8 - 4.9
     win_fanfare:  [5000, 2000],// 5.0 - 7.0
     
+    card_flip:    [7200, 300], // 7.2 - 7.5
+    chip_stack:   [7600, 400], // 7.6 - 8.0
+
     // Virtual Aliases (Mapped in logic, but defined here for safety)
     place_hero:   [1000, 400], 
     place_opp:    [1000, 400], // Pointing to Hero Default for safety
@@ -150,6 +153,30 @@ const generateThemeAssets = async (): Promise<string> => {
         const chord = tone(523.25) + tone(659.25) + tone(783.99) + tone(1046.50) + tone(1174.66);
         const env = t < 0.1 ? t * 10 : Math.exp(-(t - 0.1) * 3);
         data[winStart + i] = chord * 0.15 * env;
+    }
+
+    // 8. CARD FLIP (7.2s - 7.5s): Quick snap
+    const flipStart = 7.2 * sampleRate;
+    const flipLen = 0.3 * sampleRate;
+    for (let i = 0; i < flipLen; i++) {
+        const t = i / sampleRate;
+        const env = t < 0.02 ? t / 0.02 : Math.exp(-(t - 0.02) * 20);
+        const texture = (noise() * 0.8 + Math.sin(t * 200) * 0.2); 
+        data[flipStart + i] = texture * env * 0.3;
+    }
+
+    // 9. CHIP STACK (7.6s - 8.0s): Clinking ceramic
+    const chipStart = 7.6 * sampleRate;
+    const chipLen = 0.4 * sampleRate;
+    for (let i = 0; i < chipLen; i++) {
+        const t = i / sampleRate;
+        const hit1 = Math.exp(-((t - 0.05) ** 2) * 50000); 
+        const hit2 = Math.exp(-((t - 0.15) ** 2) * 30000);
+        
+        const tone1 = Math.sin(t * 2500 * Math.PI * 2); 
+        const tone2 = Math.sin(t * 2200 * Math.PI * 2);
+
+        data[chipStart + i] = (hit1 * tone1 + hit2 * tone2) * 0.4;
     }
 
     const wavBytes = encodeWAV(data, sampleRate);
