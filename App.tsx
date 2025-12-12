@@ -760,7 +760,7 @@ const App: React.FC = () => {
                 />
 
                 {canAnnounce && (
-                    <div className="absolute bottom-40 right-4 lg:bottom-32 lg:right-8 z-30 animate-scale-in">
+                    <div className="absolute bottom-[240px] right-4 lg:bottom-32 lg:right-8 z-[110] animate-scale-in">
                         <button 
                             onClick={() => setShowDeclarationModal(true)}
                             className="btn-base bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-900 font-bold py-3 px-8 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-yellow-300 flex items-center gap-2 group min-h-[48px]"

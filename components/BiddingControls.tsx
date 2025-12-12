@@ -28,7 +28,7 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
   };
 
   return (
-    <div className="fixed bottom-[180px] md:bottom-[200px] left-0 right-0 z-40 flex justify-center px-4 pointer-events-none">
+    <div className="fixed bottom-[240px] md:bottom-[200px] left-0 right-0 z-[110] flex justify-center px-4 pointer-events-none">
       <motion.div 
         initial="hidden"
         animate="visible"

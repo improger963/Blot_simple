@@ -105,13 +105,10 @@ export const Table: React.FC<TableProps> = ({
         triggerHaptic('error');
         return;
     }
-    if (selectedMobileCardId === card.id) {
-        onPlayCard(card);
-    } else {
-        triggerHaptic('light'); 
-        playSound('rustle', { volume: 0.5 });
-        setSelectedMobileCardId(card.id);
-    }
+    
+    // Single click play for mobile
+    triggerHaptic('light');
+    onPlayCard(card);
   };
 
   const handleMobileDragEnd = (e: any, info: PanInfo, card: Card, isPlayable: boolean) => {
@@ -324,16 +321,19 @@ export const Table: React.FC<TableProps> = ({
             {/* --- PLAYER HAND (MOBILE SCROLL SNAP CAROUSEL) --- */}
             {isMobile ? (
                 <div 
-                    className="fixed bottom-0 left-0 right-0 z-[${Z_INDEX.PLAYER_CARDS}] h-[180px] flex items-end overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-6 px-6"
+                    className="fixed bottom-0 left-0 right-0 z-[100] flex items-end overflow-x-auto snap-x snap-mandatory hide-scrollbar touch-pan-x"
                     style={{ 
+                        height: '220px', // Increased height to allow pop-up and lift
+                        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))', // Safe area lift
                         WebkitOverflowScrolling: 'touch',
                         // Add fade masks to sides
-                        maskImage: 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)',
-                        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)'
+                        maskImage: 'linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%)',
+                        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%)'
                     }}
                     ref={mobileContainerRef}
                 >
-                    <div className="flex items-end pl-8 pr-8">
+                    {/* Inner Container: Added pl-[110px] to clear Player Avatar */}
+                    <div className="flex items-end pl-[110px] pr-8 pb-2">
                         <AnimatePresence>
                             {players.hero.hand.map((card, index) => {
                                 const isValid = validMoves.some(v => v.id === card.id);
@@ -345,34 +345,17 @@ export const Table: React.FC<TableProps> = ({
                                 return (
                                     <div 
                                         key={card.id} 
-                                        className="relative flex-shrink-0 snap-center transition-all duration-200"
+                                        className="snap-start shrink-0 relative transition-transform duration-200"
                                         style={{ 
-                                            width: '85px', 
-                                            height: '120px', 
-                                            marginLeft: index === 0 ? 0 : '-35px', // Overlap
+                                            width: '72px',  // Reduced for mobile fit
+                                            height: '108px', // Scaled with width
+                                            marginLeft: index === 0 ? 0 : '-32px', // Tighter overlap to fit screen
                                             zIndex: isSelected ? 100 : index,
-                                            transform: isSelected ? 'translateY(-20px)' : 'translateY(0)'
+                                            transform: isSelected ? 'translateY(-40px)' : 'translateY(0)',
                                         }}
+                                        onClick={(e) => { e.stopPropagation(); handleMobileCardClick(card, isPlayable); }}
                                     >
-                                        {/* Action Popover */}
-                                        <AnimatePresence>
-                                            {isSelected && isPlayable && (
-                                                <motion.button
-                                                    initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                                                    animate={{ opacity: 1, y: -40, scale: 1 }}
-                                                    exit={{ opacity: 0, y: 10, scale: 0.8 }}
-                                                    className="absolute top-0 left-1/2 -translate-x-1/2 bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-full shadow-lg z-50 whitespace-nowrap border border-white/20"
-                                                    onClick={(e) => { e.stopPropagation(); onPlayCard(card); }}
-                                                >
-                                                    Tap to Play
-                                                </motion.button>
-                                            )}
-                                        </AnimatePresence>
-
-                                        <div
-                                            onClick={(e) => { e.stopPropagation(); handleMobileCardClick(card, isPlayable); }}
-                                            className="w-full h-full"
-                                        >
+                                        <div className="w-full h-full">
                                             <CardComponent 
                                                 card={card} 
                                                 disabled={!isPlayable} 
@@ -390,6 +373,8 @@ export const Table: React.FC<TableProps> = ({
                                 );
                             })}
                         </AnimatePresence>
+                        {/* Spacer for scroll end */}
+                        <div className="shrink-0 w-8" />
                     </div>
                 </div>
             ) : (
