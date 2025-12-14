@@ -206,28 +206,6 @@ export const FloatingFeedback: React.FC<{ text: string, color?: string, onComple
     );
 };
 
-export const DeclarationTooltip: React.FC<{ combinations: Combination[], onClose: () => void }> = ({ combinations, onClose }) => {
-    return (
-        <motion.div 
-            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="absolute z-[300] bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 bg-slate-900/95 backdrop-blur border border-gold/30 rounded-xl p-3 shadow-xl"
-        >
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-white/10 pb-1">Declarations</div>
-            <div className="space-y-1">
-                {combinations.map(c => (
-                    <div key={c.id} className="flex justify-between items-center text-xs">
-                        <span className="text-white font-medium">{c.type}</span>
-                        <span className="text-gold font-bold">+{c.score}</span>
-                    </div>
-                ))}
-            </div>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900/95"></div>
-        </motion.div>
-    );
-}
-
 // --- PLAYER AVATAR ---
 
 export interface PlayerAvatarProps {
@@ -235,16 +213,16 @@ export interface PlayerAvatarProps {
     position: 'top' | 'bottom';
     isActive: boolean;
     isDealer: boolean;
+    onViewDeclarations?: () => void;
 }
 
-export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, isActive, isDealer }) => {
+export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, isActive, isDealer, onViewDeclarations }) => {
     const { playSound } = useSoundManager(true);
     const TOTAL_TIME = 30;
     const [timer, setTimer] = useState(TOTAL_TIME);
     const [lastScore, setLastScore] = useState(player.roundScore);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [showParticles, setShowParticles] = useState(false);
-    const [showTooltip, setShowTooltip] = useState(false);
     const lastActionRef = useRef<string | null | undefined>(null);
     const lastTickRef = useRef<number>(TOTAL_TIME);
     
@@ -297,7 +275,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
 
     const isHero = position === 'bottom';
     const isRight = !isHero; 
-    const hasDeclarations = player.declaredCombinations && player.declaredCombinations.length > 0;
+    const hasDeclarations = player.declaredCombinations && player.declaredCombinations.some(c => c.type !== 'BELOTE');
     const isUrgent = timer < 10;
     
     const radius = 42;
@@ -326,11 +304,6 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
                             color={isHero ? '#34d399' : '#f43f5e'} 
                             onComplete={() => setFeedback(null)} 
                         />
-                    )}
-                </AnimatePresence>
-                <AnimatePresence>
-                    {showTooltip && hasDeclarations && (
-                        <DeclarationTooltip combinations={player.declaredCombinations} onClose={() => setShowTooltip(false)} />
                     )}
                 </AnimatePresence>
 
@@ -400,7 +373,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
                         <motion.button 
                             initial={{ scale: 0 }} animate={{ scale: 1 }}
                             whileHover={{ scale: 1.1 }}
-                            onClick={() => setShowTooltip(!showTooltip)}
+                            onClick={onViewDeclarations}
                             className={`absolute -top-1 ${isRight ? '-left-1' : '-right-1'} w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center z-30 cursor-pointer hover:shadow-indigo-500/50`}
                         >
                             <span className="text-base">🎴</span>

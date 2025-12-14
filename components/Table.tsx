@@ -26,6 +26,7 @@ interface TableProps {
   onOpenChat: () => void;
   onOpenSettings: () => void;
   onOpenRules: () => void;
+  onShowCombinations?: () => void;
 }
 
 export const Table: React.FC<TableProps> = ({ 
@@ -42,11 +43,13 @@ export const Table: React.FC<TableProps> = ({
     onOpenHistory,
     onOpenChat,
     onOpenSettings,
-    onOpenRules
+    onOpenRules,
+    onShowCombinations
 }) => {
   const { players, currentTrick, trumpSuit, candidateCard, dealerId, phase, currentPlayerId, deck, trickCount } = gameState;
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [selectedMobileCardId, setSelectedMobileCardId] = useState<string | null>(null);
+  const [viewingDeclarationsPlayerId, setViewingDeclarationsPlayerId] = useState<'hero' | 'opponent' | null>(null);
   const mobileContainerRef = useRef<HTMLDivElement>(null);
   const prevHeroHandLength = useRef(0);
 
@@ -99,6 +102,14 @@ export const Table: React.FC<TableProps> = ({
       }
       return ids;
   }, [trickCount, players.hero.declaredCombinations, players.hero.hasShownCombinations, players.opponent.declaredCombinations, players.opponent.hasShownCombinations]);
+
+  const canShowCombinations = useMemo(() => {
+      return phase === 'PLAYING' && 
+             trickCount === 1 && 
+             currentPlayerId === 'hero' && 
+             players.hero.declaredCombinations.some(c => c.type !== 'BELOTE') && 
+             !players.hero.hasShownCombinations;
+  }, [phase, trickCount, currentPlayerId, players.hero.declaredCombinations, players.hero.hasShownCombinations]);
 
   const handleMobileCardClick = (card: Card, isPlayable: boolean) => {
     if (!isPlayable) {
@@ -434,16 +445,62 @@ export const Table: React.FC<TableProps> = ({
                 </div>
             )}
 
-            <PlayerAvatar player={players.opponent} position="top" isActive={currentPlayerId === 'opponent'} isDealer={dealerId === 'opponent'} />
-            <PlayerAvatar player={players.hero} position="bottom" isActive={currentPlayerId === 'hero'} isDealer={dealerId === 'hero'} />
+            {/* --- MANUAL COMBINATION PROOF BUTTON --- */}
+            {canShowCombinations && onShowCombinations && (
+                <div className="absolute bottom-[230px] md:bottom-[280px] left-0 right-0 z-[120] flex justify-center pointer-events-none">
+                    <motion.button
+                        initial={{ scale: 0, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={onShowCombinations}
+                        className="pointer-events-auto bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-black font-black text-sm md:text-base py-3 px-8 rounded-full shadow-[0_0_25px_rgba(245,158,11,0.6)] border-2 border-amber-200 flex items-center gap-3 animate-pulse-slow"
+                    >
+                        <span className="text-xl">🎴</span>
+                        <div className="flex flex-col items-start leading-none">
+                            <span>ПОКАЗАТЬ</span>
+                            <span className="text-[10px] opacity-80 uppercase tracking-widest mt-0.5">Combinations</span>
+                        </div>
+                        <div className="bg-black/20 rounded-full px-2 py-0.5 text-xs font-bold ml-1">
+                            +{players.hero.declaredCombinations.filter(c => c.type !== 'BELOTE').reduce((sum, c) => sum + c.score, 0)}
+                        </div>
+                    </motion.button>
+                </div>
+            )}
+
+            <PlayerAvatar 
+                player={players.opponent} 
+                position="top" 
+                isActive={currentPlayerId === 'opponent'} 
+                isDealer={dealerId === 'opponent'} 
+                onViewDeclarations={() => setViewingDeclarationsPlayerId('opponent')}
+            />
+            <PlayerAvatar 
+                player={players.hero} 
+                position="bottom" 
+                isActive={currentPlayerId === 'hero'} 
+                isDealer={dealerId === 'hero'} 
+                onViewDeclarations={() => setViewingDeclarationsPlayerId('hero')}
+            />
             
             <ScoreBoard heroScore={players.hero.score} oppScore={players.opponent.score} target={gameState.gameTarget} round={gameState.roundHistory.length + 1} />
             <div className="absolute top-4 left-4 md:hidden z-[${Z_INDEX.SCOREBOARD}]">
                 <MobileScorePill round={gameState.roundHistory.length + 1} target={gameState.gameTarget} />
             </div>
 
+            {/* --- DECLARATION MODALS --- */}
             {showDeclarationModal && onDeclareCombinations && heroCombinations && (
                 <CombinationControls phase="DECLARE" combinations={heroCombinations} onDeclare={onDeclareCombinations} timeLeft={timeLeft} />
+            )}
+
+            {viewingDeclarationsPlayerId && (
+                <CombinationControls
+                    phase="SHOW"
+                    combinations={players[viewingDeclarationsPlayerId].declaredCombinations}
+                    onDeclare={() => setViewingDeclarationsPlayerId(null)}
+                    revealOwner={viewingDeclarationsPlayerId}
+                />
             )}
         </main>
 

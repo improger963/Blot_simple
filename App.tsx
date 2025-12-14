@@ -449,21 +449,75 @@ const App: React.FC = () => {
           ...prev,
           players: {
               ...prev.players,
-              hero: { ...prev.players.hero, declaredCombinations: finalCombos, hasShownCombinations: true }
+              hero: { 
+                  ...prev.players.hero, 
+                  declaredCombinations: finalCombos, 
+                  hasShownCombinations: false // NOTE: Changed to false. Must prove in 2nd trick!
+              }
           },
           declarations: [...prev.declarations, finalCombos.length > 0 ? "You announced combinations" : "You declared nothing"]
       }));
       setDeclarationTimer(null);
       setShowDeclarationModal(false);
       if (combos.length > 0) {
-          addNotification('success', 'Combinations announced!');
+          // Changed message to indicate next step
+          addNotification('info', 'Announced! Show in next trick to claim.');
           playSound('chip_stack');
       }
+  };
+
+  const handleShowCombinations = () => {
+      const { declaredCombinations } = gameState.players.hero;
+      if (declaredCombinations.length === 0) return;
+
+      const showable = declaredCombinations.filter(c => c.type !== 'BELOTE');
+      const score = showable.reduce((acc, c) => acc + c.score, 0);
+
+      setGameState(prev => ({
+          ...prev,
+          players: {
+              ...prev.players,
+              hero: { ...prev.players.hero, hasShownCombinations: true }
+          },
+          declarations: [...prev.declarations, `You revealed combinations (+${score})`]
+      }));
+      
+      const msg = showable.map(c => `${c.type} (${c.score})`).join(', ');
+      addNotification('success', `You revealed: ${msg}`);
+      playSound('win_fanfare', { volume: 0.5 });
+      triggerHaptic('success');
   };
 
   const handlePlayCard = (card: Card | undefined, playerId: 'hero' | 'opponent') => {
     if (!card) return;
     if (playerId === 'hero') setDeclarationTimer(null);
+
+    // --- PENALTY CHECK: Burning Declarations ---
+    // If it's the 2nd trick (trickCount 1), and hero has announced declarations but not shown them, burn them.
+    if (gameState.trickCount === 1 && playerId === 'hero') {
+        const { declaredCombinations, hasShownCombinations } = gameState.players.hero;
+        // Check if there are combinations other than Belote (Belote is automatic)
+        const hasBonusCombos = declaredCombinations.some(c => c.type !== 'BELOTE');
+        
+        if (hasBonusCombos && !hasShownCombinations) {
+            // BURN!
+            setGameState(prev => ({
+                ...prev,
+                players: {
+                    ...prev.players,
+                    hero: { 
+                        ...prev.players.hero, 
+                        declaredCombinations: prev.players.hero.declaredCombinations.filter(c => c.type === 'BELOTE'), // Keep belote only
+                        hasShownCombinations: true // Mark as handled so we don't notify again
+                    }
+                }
+            }));
+            addNotification('error', 'Комбинация сгорела! Вы забыли показать её.'); // Russian text as requested
+            playSound('place_opp_3'); // Thud sound
+            triggerHaptic('error');
+        }
+    }
+    // -------------------------------------------
 
     const { trumpSuit } = gameState;
     let actionMessage: string | null = null;
@@ -563,9 +617,7 @@ const App: React.FC = () => {
               if (result.winner === 'hero' && result.heroPoints > 0) {
                   const showable = heroDecl.filter(c => c.type !== 'BELOTE');
                   if (showable.length > 0) {
-                      const msg = showable.map(c => `${c.type} (${c.score})`).join(', ');
-                      addNotification('success', `You revealed: ${msg}`);
-                      nextState.declarations.push(`You revealed: ${msg}`);
+                      // Logic handled by manual show or auto-calc, but just log here
                   } else {
                       if (result.heroPoints > 20) addNotification('success', `Your Declarations Win! (+${result.heroPoints})`);
                   }
@@ -706,7 +758,7 @@ const App: React.FC = () => {
   const mustPick = isJackObligation || isRound2Obligation;
   
   const hasDeclarableCombos = gameState.players.hero.combinations.some(c => c.type !== 'BELOTE');
-  const canAnnounce = gameState.phase === 'PLAYING' && gameState.trickCount === 0 && gameState.currentPlayerId === 'hero' && hasDeclarableCombos && !gameState.players.hero.hasShownCombinations && declarationTimer !== null;
+  const canAnnounce = gameState.phase === 'PLAYING' && gameState.trickCount === 0 && gameState.currentPlayerId === 'hero' && hasDeclarableCombos && !gameState.players.hero.declaredCombinations.length && declarationTimer !== null;
 
   // Recovery Handler
   const handleStateSync = (serverState: GameState) => {
@@ -757,6 +809,9 @@ const App: React.FC = () => {
                     onOpenChat={() => setShowChat(true)}
                     onOpenSettings={() => setShowSettings(true)}
                     onOpenRules={() => setShowRules(true)}
+
+                    // Manual Proof
+                    onShowCombinations={handleShowCombinations}
                 />
 
                 {canAnnounce && (
