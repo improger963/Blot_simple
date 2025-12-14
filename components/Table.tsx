@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, GameState, TrickCard, Combination, GameSettings } from '../types';
 import { CardComponent, CardBack } from './Card';
@@ -11,6 +12,7 @@ import { calculateFanTransform, Z_INDEX } from '../utils/uiLogic';
 import { getWinningCard } from '../utils/gameLogic';
 import { useHaptics } from '../hooks/useHaptics';
 import { useSoundManager } from '../hooks/useSoundManager';
+import { useDealAnimation } from '../hooks/useDealAnimation';
 
 interface TableProps {
   gameState: GameState;
@@ -29,6 +31,10 @@ interface TableProps {
   onOpenSettings: () => void;
   onOpenRules: () => void;
   onShowCombinations?: () => void;
+  canDeclare?: boolean;
+  onOpenDeclaration?: () => void;
+  candidateRejected?: boolean;
+  onDistributionComplete?: () => void;
 }
 
 export const Table: React.FC<TableProps> = ({ 
@@ -46,9 +52,13 @@ export const Table: React.FC<TableProps> = ({
     onOpenChat,
     onOpenSettings,
     onOpenRules,
-    onShowCombinations
+    onShowCombinations,
+    canDeclare,
+    onOpenDeclaration,
+    candidateRejected,
+    onDistributionComplete
 }) => {
-  const { players, currentTrick, trumpSuit, candidateCard, dealerId, phase, currentPlayerId, deck, trickCount, bidTaker } = gameState;
+  const { players, currentTrick, trumpSuit, candidateCard, dealerId, phase, currentPlayerId, deck, trickCount, bidTaker, contractType } = gameState;
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [selectedMobileCardId, setSelectedMobileCardId] = useState<string | null>(null);
   const [viewingDeclarationsPlayerId, setViewingDeclarationsPlayerId] = useState<'hero' | 'opponent' | null>(null);
@@ -57,6 +67,12 @@ export const Table: React.FC<TableProps> = ({
   const [showOpponentReveal, setShowOpponentReveal] = useState(false);
   // Track if we've already triggered the reveal in Trick 2 to prevent re-triggering
   const hasTriggeredTrick2Reveal = useRef(false);
+
+  // Animation Hook
+  const dealStage = useDealAnimation({ 
+      phase, 
+      onComplete: onDistributionComplete || (() => {}) 
+  });
 
   const mobileContainerRef = useRef<HTMLDivElement>(null);
   const prevHeroHandLength = useRef(0);
@@ -106,17 +122,30 @@ export const Table: React.FC<TableProps> = ({
 
   // --- Sound Logic: Dealing ---
   useEffect(() => {
-      const currentLen = players.hero.hand.length;
-      if (currentLen > prevHeroHandLength.current && (phase === 'DEALING' || phase === 'BIDDING' || phase === 'PLAYING')) {
-          const count = currentLen - prevHeroHandLength.current;
-          for (let i = 0; i < Math.min(count, 8); i++) {
+      // Logic handled via dealStage mostly now, but keep simple one for initial deals
+      if (phase === 'DEALING') {
+         // Existing sound logic for initial 6 cards
+         const currentLen = players.hero.hand.length;
+         if (currentLen > prevHeroHandLength.current) {
+              const count = currentLen - prevHeroHandLength.current;
+              for (let i = 0; i < Math.min(count, 8); i++) {
+                  setTimeout(() => {
+                      playSound('deal', { pan: Math.random() * 0.4 - 0.2 });
+                  }, i * 60);
+              }
+         }
+         prevHeroHandLength.current = currentLen;
+      }
+      
+      // Secondary Deal Sounds
+      if (dealStage === 'deck_deal') {
+          for (let i = 0; i < 3; i++) {
               setTimeout(() => {
                   playSound('deal', { pan: Math.random() * 0.4 - 0.2 });
-              }, i * 60);
+              }, i * 150);
           }
       }
-      prevHeroHandLength.current = currentLen;
-  }, [players.hero.hand.length, phase, playSound]);
+  }, [players.hero.hand.length, phase, playSound, dealStage]);
 
   // Clear selection
   useEffect(() => {
@@ -129,9 +158,11 @@ export const Table: React.FC<TableProps> = ({
   };
 
   const currentTrickWinnerId = useMemo(() => {
-    if (currentTrick.length !== 2 || !trumpSuit) return null;
-    return getWinningCard(currentTrick, trumpSuit)?.playerId;
-  }, [currentTrick, trumpSuit]);
+    if (currentTrick.length !== 2) return null; // Wait for full trick
+    // Handle NO_TRUMP by passing null as trumpSuit if contract is NO_TRUMP, 
+    // BUT getWinningCard handles (..., null, 'NO_TRUMP') correctly internally.
+    return getWinningCard(currentTrick, trumpSuit, contractType)?.playerId;
+  }, [currentTrick, trumpSuit, contractType]);
 
   const highlightedCardIds = useMemo(() => {
       if (trickCount !== 1) return new Set<string>();
@@ -224,7 +255,7 @@ export const Table: React.FC<TableProps> = ({
 
             {/* --- TRUMP BADGE (Dynamic Position) --- */}
             <AnimatePresence>
-                {phase !== 'BIDDING' && trumpSuit && bidTaker && (
+                {phase !== 'BIDDING' && (trumpSuit || contractType === 'NO_TRUMP') && bidTaker && (
                     <motion.div
                         layoutId="trump-badge"
                         initial={{ scale: 0, opacity: 0 }}
@@ -233,12 +264,12 @@ export const Table: React.FC<TableProps> = ({
                         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                         className={`absolute z-[30] pointer-events-none
                             ${bidTaker === 'hero' 
-                                ? 'bottom-32 left-4 md:bottom-28 md:left-32' // Hero: Above avatar on mobile, Right of avatar on desktop
-                                : 'top-28 right-4 md:top-28 md:right-32'     // Opponent: Below avatar on mobile, Left of avatar on desktop
+                                ? 'bottom-48 left-5 md:bottom-28 md:left-32' // Hero: Above avatar on mobile, Centered horizontally
+                                : 'top-44 right-5 md:top-28 md:right-32'     // Opponent: Below avatar on mobile, Centered horizontally
                             }
                         `}
                     >
-                        <TrumpBadge suit={trumpSuit} />
+                        <TrumpBadge suit={trumpSuit} isNoTrump={contractType === 'NO_TRUMP'} />
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -252,23 +283,48 @@ export const Table: React.FC<TableProps> = ({
                  {deck.length > 0 && (
                     <motion.div className="relative w-24 h-36" whileHover={{ scale: 1.05 }}>
                         {[2,1,0].map((i) => (
-                             <div key={i} className="absolute inset-0 rounded-xl shadow-lg border border-white/5" style={{ transform: `translate(${i}px, ${-i}px)` }}>
+                             <motion.div 
+                                key={i} 
+                                className="absolute inset-0 rounded-xl shadow-lg border border-white/5" 
+                                style={{ transform: `translate(${i}px, ${-i}px)` }}
+                                animate={dealStage === 'deck_deal' ? { x: [0, 200, 400], opacity: [1, 0.5, 0] } : {}}
+                             >
                                  <CardBack shadow={false} />
-                             </div>
+                             </motion.div>
                          ))}
                          <span className="absolute -bottom-6 left-0 right-0 text-center text-[10px] font-bold text-white/50 tracking-wider">{deck.length} LEFT</span>
                     </motion.div>
                  )}
 
                  <div className="absolute top-0 left-28 md:left-32 flex flex-col items-center justify-center min-w-[100px]">
-                     {/* REMOVED: Static Trump Circle. Now using TrumpBadge above. */}
                      
-                     {candidateCard && phase === 'BIDDING' && (
-                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-0">
-                             <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/60 text-white/80 text-[10px] font-bold px-2 py-1 rounded border border-white/10 backdrop-blur-sm">Candidate</div>
-                             <CardComponent card={candidateCard} disabled className="opacity-100 shadow-2xl hover:scale-105 transition-transform" />
-                         </motion.div>
-                     )}
+                     <AnimatePresence>
+                        {candidateCard && (phase === 'BIDDING' || phase === 'DISTRIBUTING') && (
+                             <motion.div 
+                                key="candidate"
+                                initial={{ opacity: 0 }} 
+                                animate={
+                                    dealStage === 'candidate_move' 
+                                        ? { 
+                                            // Fly animation logic
+                                            x: candidateRejected ? 500 : (bidTaker === 'hero' ? 0 : 0), 
+                                            y: candidateRejected ? 0 : (bidTaker === 'hero' ? 400 : -400),
+                                            scale: candidateRejected ? 0.5 : 0.8,
+                                            opacity: candidateRejected ? 0 : 0,
+                                            transition: { duration: 0.6, ease: "easeInOut" }
+                                          } 
+                                        : { opacity: 1 }
+                                }
+                                exit={{ opacity: 0 }}
+                                className="relative z-0"
+                             >
+                                 {phase === 'BIDDING' && (
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/60 text-white/80 text-[10px] font-bold px-2 py-1 rounded border border-white/10 backdrop-blur-sm">Candidate</div>
+                                 )}
+                                 <CardComponent card={candidateCard} disabled className="opacity-100 shadow-2xl hover:scale-105 transition-transform" />
+                             </motion.div>
+                        )}
+                     </AnimatePresence>
                  </div>
             </div>
 
@@ -303,8 +359,8 @@ export const Table: React.FC<TableProps> = ({
                                 onAnimationComplete={(definition) => {
                                     if (definition === 'exit' && index === 0) {
                                          let winnerId = currentTrickWinnerId;
-                                         if (!winnerId && gameState.lastTrick && gameState.lastTrick.length === 2 && trumpSuit) {
-                                              winnerId = getWinningCard(gameState.lastTrick, trumpSuit)?.playerId;
+                                         if (!winnerId && gameState.lastTrick && gameState.lastTrick.length === 2 && (trumpSuit || contractType === 'NO_TRUMP')) {
+                                              winnerId = getWinningCard(gameState.lastTrick, trumpSuit, contractType)?.playerId;
                                          }
                                          
                                          const isHeroWin = winnerId === 'hero';
@@ -319,7 +375,7 @@ export const Table: React.FC<TableProps> = ({
                                 <CardComponent 
                                     card={tick.card} 
                                     disabled 
-                                    isTrump={tick.card.suit === trumpSuit} 
+                                    isTrump={tick.card.suit === trumpSuit && contractType === 'TRUMP'} 
                                     trumpSuit={trumpSuit} 
                                     hoverable={false}
                                     isBelote={beloteIds.includes(tick.card.id)} 
@@ -425,7 +481,7 @@ export const Table: React.FC<TableProps> = ({
                                                 isPlayable={isPlayable}
                                                 isInvalid={isMyTurn && !isValid}
                                                 trumpSuit={trumpSuit}
-                                                isTrump={card.suit === trumpSuit}
+                                                isTrump={card.suit === trumpSuit && contractType === 'TRUMP'}
                                                 isWinningComboCard={isHighlighted}
                                                 isBelote={beloteIds.includes(card.id)}
                                                 hoverable={false}
@@ -453,6 +509,10 @@ export const Table: React.FC<TableProps> = ({
                                 const isInvalid = isMyTurn && !isValid;
                                 const isHighlighted = highlightedCardIds.has(card.id);
                                 const { rotate, translateX, translateY, zIndex } = calculateFanTransform(i, players.hero.hand.length, false, false);
+                                
+                                // Determine initial position for new cards from Deal animation
+                                const isNewCard = phase === 'DISTRIBUTING';
+                                const initialPos = isNewCard ? { x: -300, y: -200, opacity: 0 } : { x: -window.innerWidth / 2, y: window.innerHeight, opacity: 0 };
 
                                 return (
                                     <motion.div
@@ -462,7 +522,7 @@ export const Table: React.FC<TableProps> = ({
                                             zIndex: isHighlighted ? Z_INDEX.PLAYER_CARDS + 50 : zIndex, 
                                             width: '8rem', transformOrigin: 'bottom center', transformStyle: "preserve-3d"
                                         }}
-                                        initial={{ x: -window.innerWidth / 2, y: window.innerHeight, opacity: 0 }}
+                                        initial={initialPos}
                                         animate={{ 
                                             x: translateX - 64, 
                                             y: isHighlighted ? translateY - 40 : translateY, 
@@ -483,7 +543,7 @@ export const Table: React.FC<TableProps> = ({
                                             isPlayable={isPlayable}
                                             isInvalid={isInvalid}
                                             trumpSuit={trumpSuit}
-                                            isTrump={card.suit === trumpSuit}
+                                            isTrump={card.suit === trumpSuit && contractType === 'TRUMP'}
                                             hoverable={false} 
                                             className={isPlayable ? 'shadow-card-float' : ''}
                                             isWinningComboCard={isHighlighted}
@@ -497,7 +557,28 @@ export const Table: React.FC<TableProps> = ({
                 </div>
             )}
 
-            {/* --- MANUAL COMBINATION PROOF BUTTON --- */}
+            {/* --- MANUAL COMBINATION DECLARE BUTTON (TRICK 0) --- */}
+            {canDeclare && onOpenDeclaration && (
+                <div className="absolute bottom-[200px] md:bottom-[280px] left-0 right-0 z-[120] flex justify-center pointer-events-none">
+                    <motion.button
+                        initial={{ scale: 0, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={onOpenDeclaration}
+                        className="pointer-events-auto bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-black font-black text-sm md:text-base py-3 px-8 rounded-full shadow-[0_0_25px_rgba(245,158,11,0.6)] border-2 border-amber-200 flex items-center gap-3 animate-pulse-slow"
+                    >
+                        <span className="text-xl">📢</span>
+                        <div className="flex flex-col items-start leading-none">
+                            <span>DECLARE</span>
+                            <span className="text-[10px] opacity-80 uppercase tracking-widest mt-0.5">Combination</span>
+                        </div>
+                    </motion.button>
+                </div>
+            )}
+
+            {/* --- MANUAL COMBINATION PROOF BUTTON (TRICK 1) --- */}
             {canShowCombinations && onShowCombinations && (
                 <div className="absolute bottom-[200px] md:bottom-[280px] left-0 right-0 z-[120] flex justify-center pointer-events-none">
                     <motion.button

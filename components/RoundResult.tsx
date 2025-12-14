@@ -1,7 +1,8 @@
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { LastRoundData } from '../types';
 import { CountUp } from './UI';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Z_INDEX } from '../utils/uiLogic';
 import { SUIT_COLORS, SUIT_SYMBOLS } from '../constants';
 
@@ -25,6 +26,16 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
     // Calculate previous scores to animate the bar from
     const prevHeroScore = Math.max(0, currentScores.hero - hero.finalPoints);
     const prevOppScore = Math.max(0, currentScores.opponent - opponent.finalPoints);
+
+    // Dedans Animation State
+    const [dedansAnim, setDedansAnim] = useState(false);
+
+    useEffect(() => {
+        if (isDedans) {
+            const t = setTimeout(() => setDedansAnim(true), 500);
+            return () => clearTimeout(t);
+        }
+    }, [isDedans]);
 
     return (
         <div className={`fixed inset-0 flex items-center justify-center z-[${Z_INDEX.MODALS_BACKDROP}] p-4`}>
@@ -64,14 +75,14 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                                     {isCapot ? 'CAPOT !' : 'DEDANS !'}
                                 </span>
                                 <span className="text-xs font-bold text-black/80 bg-white/20 px-2 py-0.5 rounded">
-                                    {isCapot ? '+90 Bonus' : 'All Points Lost'}
+                                    {isCapot ? '+21 Points' : 'All Points Lost'}
                                 </span>
                             </motion.div>
                         )}
                         
                         {!isCapot && !isDedans && (
                             <div className="text-sm text-white/60 font-medium mt-1">
-                                Contract: {roundInfo.bidTaker === 'hero' ? 'You' : 'Opponent'} took {roundInfo.trump && SUIT_SYMBOLS[roundInfo.trump]}
+                                Contract: {roundInfo.bidTaker === 'hero' ? 'You' : 'Opponent'} took {roundInfo.contractType === 'NO_TRUMP' ? 'NO TRUMP' : (roundInfo.trump && SUIT_SYMBOLS[roundInfo.trump])}
                             </div>
                         )}
                     </div>
@@ -81,13 +92,27 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                 </div>
 
                 {/* --- SPLIT SCORE VIEW --- */}
-                <div className="flex-1 bg-slate-900/80 p-6 md:p-8 flex flex-col md:flex-row gap-8 relative">
+                <div className="flex-1 bg-slate-900/80 p-6 md:p-8 flex flex-col md:flex-row gap-8 relative overflow-hidden">
                     
                     {/* VS Divider */}
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center justify-center w-10 h-10 bg-slate-800 rounded-full border border-white/10 z-10 font-black text-slate-500 text-xs">VS</div>
 
+                    {/* DEDANS ANIMATION OVERLAY */}
+                    {isDedans && dedansAnim && (
+                        <motion.div 
+                            initial={{ opacity: 0, x: roundInfo.bidTaker === 'hero' ? 0 : 0 }}
+                            animate={{ opacity: [0, 1, 0], x: roundInfo.bidTaker === 'hero' ? 200 : -200 }}
+                            transition={{ duration: 1.5, ease: "easeInOut" }}
+                            className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
+                        >
+                            <div className="text-amber-400 font-black text-2xl drop-shadow-lg bg-black/50 px-4 py-2 rounded-xl backdrop-blur-sm border border-amber-500/50">
+                                💸 Points Transfer
+                            </div>
+                        </motion.div>
+                    )}
+
                     {/* HERO COLUMN */}
-                    <div className="flex-1 flex flex-col gap-4">
+                    <div className={`flex-1 flex flex-col gap-4 transition-opacity duration-500 ${isDedans && roundInfo.bidTaker === 'hero' && dedansAnim ? 'opacity-30' : 'opacity-100'}`}>
                         <div className="flex items-center gap-4 border-b border-white/5 pb-4">
                             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-900 flex items-center justify-center text-2xl shadow-lg border-2 border-white/10">
                                 😎
@@ -124,11 +149,17 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                                     <span>+10</span>
                                 </div>
                             )}
+                            {isCapot && roundInfo.winnerId === 'hero' && (
+                                <div className="flex justify-between text-gold font-bold">
+                                    <span>Capot Bonus</span>
+                                    <span>+90</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* OPPONENT COLUMN */}
-                    <div className="flex-1 flex flex-col gap-4 md:text-right">
+                    <div className={`flex-1 flex flex-col gap-4 md:text-right transition-opacity duration-500 ${isDedans && roundInfo.bidTaker === 'opponent' && dedansAnim ? 'opacity-30' : 'opacity-100'}`}>
                         <div className="flex flex-row-reverse md:flex-row items-center gap-4 border-b border-white/5 pb-4 justify-between md:justify-end">
                             <div className="text-right">
                                 <h3 className="text-rose-400 font-bold text-lg uppercase tracking-wider">Opponent</h3>
@@ -163,6 +194,12 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                                 <div className="flex justify-between md:flex-row-reverse text-blue-400">
                                     <span>Last Trick</span>
                                     <span>+10</span>
+                                </div>
+                            )}
+                            {isCapot && roundInfo.winnerId === 'opponent' && (
+                                <div className="flex justify-between md:flex-row-reverse text-gold font-bold">
+                                    <span>Capot Bonus</span>
+                                    <span>+90</span>
                                 </div>
                             )}
                         </div>
@@ -213,7 +250,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                             {/* New Score Fill */}
                             <motion.div 
                                 className="h-full bg-gradient-to-r from-rose-600 to-rose-400 relative z-10"
-                                initial={{ width: `${Math.min((prevOppScore / target) * 100, 100)}%` }}
+                                initial={{ width: `${Math.min((currentScores.opponent / target) * 100, 100)}%` }}
                                 animate={{ width: `${Math.min((currentScores.opponent / target) * 100, 100)}%` }}
                                 transition={{ duration: 1.5, ease: 'circOut', delay: 0.2 }}
                             />

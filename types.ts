@@ -39,6 +39,7 @@ export interface TrickCard {
 }
 
 export type ContractStatus = 'NORMAL' | 'DEDANS' | 'CAPOT';
+export type ContractType = 'TRUMP' | 'NO_TRUMP';
 
 export interface ScoreBreakdown {
   rawCardPoints: number; // Points from tricks (0-152)
@@ -60,6 +61,7 @@ export interface LastRoundData {
         trump: Suit | null;
         bidTaker: 'hero' | 'opponent';
         status: ContractStatus;
+        contractType: ContractType;
         winnerId: 'hero' | 'opponent';
     }
 }
@@ -72,6 +74,7 @@ export interface RoundResult {
   winner: 'hero' | 'opponent' | 'draw';
   contractStatus: ContractStatus;
   bidTaker: 'hero' | 'opponent';
+  contractType: ContractType;
   details?: LastRoundData; // Detailed breakdown for history expansion
 }
 
@@ -93,6 +96,7 @@ export interface GameSettings {
   cardSize: 'normal' | 'large';
   animationsEnabled: boolean;
   difficulty: Difficulty;
+  targetScore: number; // 51, 101, 201, 501
 }
 
 export interface GameState {
@@ -104,6 +108,7 @@ export interface GameState {
   };
   candidateCard: Card | null;
   trumpSuit: Suit | null;
+  contractType: ContractType; // Added to track if we are in No Trump mode
   currentTrick: TrickCard[];
   lastTrick: TrickCard[] | null; // Previous completed trick
   currentPlayerId: 'hero' | 'opponent';

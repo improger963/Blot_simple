@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState, useRef } from 'react';
-import { Card, GameState, Player, Suit, Combination, GamePhase, Notification, NotificationType, ScoreBreakdown, GameSettings, LastRoundData } from './types';
+import { Card, GameState, Player, Suit, Combination, GamePhase, Notification, NotificationType, ScoreBreakdown, GameSettings, LastRoundData, ContractType } from './types';
 import { Table } from './components/Table';
 import { BiddingControls } from './components/BiddingControls';
 import { A11yAnnouncer, HistoryPanel, ChatSheet, SettingsModal, Confetti, CoinExplosion, ScreenFX } from './components/UI';
@@ -45,7 +46,8 @@ const DEFAULT_SETTINGS: GameSettings = {
     highContrast: false,
     cardSize: 'normal',
     animationsEnabled: true,
-    difficulty: 'intermediate'
+    difficulty: 'intermediate',
+    targetScore: 501
 };
 
 const StarIcon = () => (
@@ -68,6 +70,8 @@ const App: React.FC = () => {
   const updateSettings = (s: GameSettings) => {
       setSettings(s);
       localStorage.setItem('blot_settings', JSON.stringify(s));
+      // Update running game target if changed
+      setGameState(prev => ({ ...prev, gameTarget: s.targetScore }));
   };
 
   const [gameState, setGameState] = useState<GameState>({
@@ -79,6 +83,7 @@ const App: React.FC = () => {
     },
     candidateCard: null,
     trumpSuit: null,
+    contractType: 'TRUMP', // Default
     currentTrick: [],
     lastTrick: null,
     currentPlayerId: 'hero', 
@@ -86,7 +91,7 @@ const App: React.FC = () => {
     bidTaker: null,
     bidRound: 1,
     declarations: [],
-    gameTarget: 501,
+    gameTarget: settings.targetScore,
     trickCount: 0,
     roundHistory: [],
     a11yAnnouncement: "Welcome to Simple Blot 24",
@@ -94,6 +99,7 @@ const App: React.FC = () => {
 
   const [declarationTimer, setDeclarationTimer] = useState<number | null>(null);
   const [showDeclarationModal, setShowDeclarationModal] = useState(false);
+  const [declarationComplete, setDeclarationComplete] = useState(false); // Track if user has already handled declarations this round
   
   // Sheet States
   const [showHistory, setShowHistory] = useState(false);
@@ -114,6 +120,9 @@ const App: React.FC = () => {
       screenShake: false,
       beloteIds: []
   });
+
+  // Track if candidate was rejected for animation purposes
+  const [candidateRejected, setCandidateRejected] = useState(false);
 
   // --- Haptics & Sound: Turn Notification ---
   useEffect(() => {
@@ -181,6 +190,7 @@ const App: React.FC = () => {
       currentPlayerId: firstBidder,
       bidRound: 1,
       trumpSuit: null,
+      contractType: 'TRUMP',
       bidTaker: null,
       currentTrick: [],
       lastTrick: null,
@@ -189,8 +199,12 @@ const App: React.FC = () => {
       lastRoundBreakdown: undefined,
       a11yAnnouncement: msg,
     }));
+    
+    // Reset Declaration States
     setDeclarationTimer(null);
     setShowDeclarationModal(false);
+    setDeclarationComplete(false);
+    setCandidateRejected(false);
     
     addNotification('info', msg);
     playSound('turn_start', { pan: 0 }); // Sound on start
@@ -289,6 +303,7 @@ const App: React.FC = () => {
                 gameState.players.opponent.hand, 
                 gameState.currentTrick, 
                 gameState.trumpSuit,
+                gameState.contractType,
                 settings.difficulty,
                 playedCards
             );
@@ -308,18 +323,31 @@ const App: React.FC = () => {
   // --- Trigger Declaration for Player ---
   useEffect(() => {
       const hasDeclarableCombos = gameState.players.hero.combinations.some(c => c.type !== 'BELOTE');
-      if (gameState.phase === 'PLAYING' && gameState.trickCount === 0 && gameState.currentPlayerId === 'hero' && hasDeclarableCombos && !gameState.players.hero.hasShownCombinations && declarationTimer === null) {
-          setDeclarationTimer(10); 
+      // Fix: Removed automatic setShowDeclarationModal(true)
+      if (gameState.phase === 'PLAYING' && 
+          gameState.trickCount === 0 && 
+          gameState.currentPlayerId === 'hero' && 
+          hasDeclarableCombos && 
+          !gameState.players.hero.hasShownCombinations && 
+          declarationTimer === null && 
+          !declarationComplete) {
+          
+          setDeclarationTimer(15); // Start timer but don't force modal
+          addNotification('info', 'Combinations available! Tap DECLARE.');
       }
-  }, [gameState.phase, gameState.trickCount, gameState.currentPlayerId, gameState.players.hero.combinations, gameState.players.hero.hasShownCombinations]);
+  }, [gameState.phase, gameState.trickCount, gameState.currentPlayerId, gameState.players.hero.combinations, gameState.players.hero.hasShownCombinations, declarationComplete]);
 
-  const distributeCards = (takerId: 'hero' | 'opponent', trump: Suit, remainingDeck: Card[], candidate: Card, takenInRound1: boolean) => {
+  const distributeCards = (takerId: 'hero' | 'opponent', trump: Suit | null, remainingDeck: Card[], candidate: Card, keepCandidate: boolean, contractType: ContractType) => {
       let extraTaker: Card[] = [];
       let extraOpponent: Card[] = [];
       let newHeroHand = [...gameState.players.hero.hand];
       let newOpponentHand = [...gameState.players.opponent.hand];
 
-      if (takenInRound1) {
+      // Logic: If taker keeps candidate, they get candidate + 2 cards (3 total added)
+      // If taker rejects candidate (Round 2 specific), they get 3 cards from deck
+      // Opponent always gets 3 cards
+      
+      if (keepCandidate) {
           extraTaker = remainingDeck.slice(0, 2);
           extraOpponent = remainingDeck.slice(2, 5);
           if (takerId === 'hero') {
@@ -330,6 +358,7 @@ const App: React.FC = () => {
               newHeroHand.push(...extraOpponent);
           }
       } else {
+          // Candidate is discarded/burned
           extraTaker = remainingDeck.slice(0, 3);
           extraOpponent = remainingDeck.slice(3, 6);
           if (takerId === 'hero') {
@@ -341,25 +370,38 @@ const App: React.FC = () => {
           }
       }
 
-      newHeroHand = sortHand(newHeroHand, trump);
-      newOpponentHand = sortHand(newOpponentHand, trump);
-      const heroCombos = calculateCombinations(newHeroHand, trump);
-      const oppCombos = calculateCombinations(newOpponentHand, trump);
+      newHeroHand = sortHand(newHeroHand, trump, contractType);
+      newOpponentHand = sortHand(newOpponentHand, trump, contractType);
+      const heroCombos = calculateCombinations(newHeroHand, trump, contractType);
+      const oppCombos = calculateCombinations(newOpponentHand, trump, contractType);
 
       return { heroHand: newHeroHand, opponentHand: newOpponentHand, heroCombos, oppCombos };
   };
 
-  const handleTake = (suit: Suit, fromCandidate: boolean) => {
+  const handleTake = (suit: Suit | null, keepCandidate: boolean, isNoTrump: boolean = false) => {
     const takerId = gameState.currentPlayerId;
     const { deck, candidateCard } = gameState;
-    const dist = distributeCards(takerId, suit, deck, candidateCard!, fromCandidate);
-    const msg = `${takerId === 'hero' ? 'You' : 'Opponent'} took ${suit} (${fromCandidate ? 'R1' : 'R2'})`;
+    const contractType: ContractType = isNoTrump ? 'NO_TRUMP' : 'TRUMP';
+    
+    // Set flag for animation
+    setCandidateRejected(!keepCandidate);
+    
+    // Distribute Logic
+    const dist = distributeCards(takerId, suit, deck, candidateCard!, keepCandidate, contractType);
+    
+    let msg = "";
+    if (contractType === 'NO_TRUMP') {
+        msg = `${takerId === 'hero' ? 'You' : 'Opponent'} took NO TRUMP!`;
+    } else {
+        msg = `${takerId === 'hero' ? 'You' : 'Opponent'} took ${suit}`;
+    }
 
     setGameState(prev => ({
         ...prev,
-        trumpSuit: suit,
+        trumpSuit: isNoTrump ? null : suit,
+        contractType: contractType,
         bidTaker: takerId,
-        phase: 'PLAYING',
+        phase: 'DISTRIBUTING', // Enter animation phase
         players: {
             hero: { ...prev.players.hero, hand: dist.heroHand, combinations: dist.heroCombos },
             opponent: { ...prev.players.opponent, hand: dist.opponentHand, combinations: dist.oppCombos },
@@ -368,17 +410,27 @@ const App: React.FC = () => {
         declarations: [...prev.declarations, msg],
         a11yAnnouncement: msg
     }));
-    addNotification('success', takerId === 'hero' ? `You took with ${suit}!` : `Opponent took with ${suit}.`);
+    addNotification('success', msg);
     playSound('turn_start');
+  };
+  
+  // Callback to finish animation and start play
+  const handleDistributionComplete = () => {
+      setGameState(prev => ({ ...prev, phase: 'PLAYING' }));
   };
 
   const handlePass = () => {
     const { dealerId, currentPlayerId, bidRound, candidateCard } = gameState;
     let nextRound = bidRound;
     
+    // JACK CONSTRAINT Check for Round 1
+    // If it's a Jack, and it's Round 1, and it's Dealer's turn (2nd player), they cannot pass.
+    // This should be enforced by UI disabling the pass button, but good to have a safety check.
     if (bidRound === 1 && candidateCard?.rank === 'J' && currentPlayerId === dealerId) {
-        handleTake(candidateCard.suit, true);
-        return;
+        // Force take logic? Or just return and let UI handle it.
+        // For bot, we handle this in handleBotBid.
+        // For human, button is hidden.
+        return; 
     }
 
     const isDealer = currentPlayerId === dealerId;
@@ -407,6 +459,13 @@ const App: React.FC = () => {
         ...prev,
         currentPlayerId: nextPlayer,
         bidRound: nextRound as 1 | 2,
+        players: {
+            ...prev.players,
+            [currentPlayerId]: {
+                ...prev.players[currentPlayerId],
+                lastAction: 'Pass' // Visual feedback
+            }
+        },
         declarations: [...prev.declarations, `Pass`]
     }));
     playSound('card_flip', { pan: currentPlayerId === 'hero' ? 0.3 : -0.3 }); // Sound on pass
@@ -419,22 +478,28 @@ const App: React.FC = () => {
       const isDealer = dealerId === 'opponent';
       const isJackCandidate = candidate.rank === 'J';
       
+      // Jack Constraint: Dealer must take Jack in Round 1 if partner passed (which is true if we are here as dealer)
       if (bidRound === 1 && isJackCandidate && isDealer) {
-           handleTake(candidate.suit, true);
+           handleTake(candidate.suit, true, false);
            return;
       }
-      if (bidRound === 2 && isDealer) {
-          const decision = getBotBidDecision(hand, candidate, 2, 'intermediate');
-          if (decision.action === 'take') handleTake(decision.suit, false);
-          else {
-              const validSuits = SUITS.filter(s => s !== candidate.suit);
-              handleTake(validSuits[0], false);
-          }
-          return;
-      }
+      
       const decision = getBotBidDecision(hand, candidate, bidRound, settings.difficulty);
-      if (decision.action === 'take') handleTake(decision.suit, bidRound === 1);
-      else handlePass();
+      
+      if (decision.action === 'take') {
+          const isNoTrump = decision.contract === 'NO_TRUMP';
+          const isCandidateSuit = decision.suit === candidate.suit;
+          // Bot logic for "Keeping Candidate" in R2: 
+          // If suit matches candidate (R1 or R2-same), yes. 
+          // If R2 different suit, usually No, but simple bot can say No.
+          const keepCandidate = isCandidateSuit || bidRound === 1; // Simplify bot choice
+          
+          handleTake(decision.suit || null, keepCandidate, isNoTrump);
+      } else {
+          // If forced in round 2 (isDealer) and decision was pass (simple bot), default to taking weakest suit or No Trump if valid?
+          // For now, if decision is pass, just pass. If dealer at R2, game re-deals.
+          handlePass();
+      }
   };
 
   const handleAutoDeclare = () => {
@@ -445,6 +510,9 @@ const App: React.FC = () => {
   };
 
   const handleDeclareCombinations = (combos: Combination[]) => {
+      // Mark declaration as handled for this round to prevent loop
+      setDeclarationComplete(true);
+
       const belote = gameState.players.hero.combinations.find(c => c.type === 'BELOTE');
       let finalCombos = [...combos];
       finalCombos = solveCombinationConflicts(finalCombos);
@@ -498,7 +566,12 @@ const App: React.FC = () => {
 
   const handlePlayCard = (card: Card | undefined, playerId: 'hero' | 'opponent') => {
     if (!card) return;
-    if (playerId === 'hero') setDeclarationTimer(null);
+    
+    // If hero plays a card, their chance to declare is over for this round
+    if (playerId === 'hero') {
+        setDeclarationTimer(null);
+        setDeclarationComplete(true); 
+    }
 
     // --- PENALTY CHECK: Burning Declarations ---
     // If it's the 2nd trick (trickCount 1), and hero has announced declarations but not shown them, burn them.
@@ -527,10 +600,11 @@ const App: React.FC = () => {
     }
     // -------------------------------------------
 
-    const { trumpSuit } = gameState;
+    const { trumpSuit, contractType } = gameState;
     let actionMessage: string | null = null;
 
-    if (trumpSuit && card.suit === trumpSuit && (card.rank === 'K' || card.rank === 'Q')) {
+    // Belote Check (Only in TRUMP mode)
+    if (contractType === 'TRUMP' && trumpSuit && card.suit === trumpSuit && (card.rank === 'K' || card.rank === 'Q')) {
         const player = gameState.players[playerId];
         const hasBelote = player.combinations.some(c => c.type === 'BELOTE');
         
@@ -575,11 +649,11 @@ const App: React.FC = () => {
   };
 
   const resolveTrick = () => {
-      const { currentTrick, trumpSuit, players } = gameState;
-      const winner = getWinningCard(currentTrick, trumpSuit!);
+      const { currentTrick, trumpSuit, contractType, players } = gameState;
+      const winner = getWinningCard(currentTrick, trumpSuit, contractType);
       if (!winner) return;
 
-      const points = currentTrick.reduce((sum, t) => sum + getCardPoints(t.card, trumpSuit), 0);
+      const points = currentTrick.reduce((sum, t) => sum + getCardPoints(t.card, trumpSuit, contractType), 0);
       const winnerId = winner.playerId;
       const newCaptured = [...players[winnerId].capturedCards, ...currentTrick.map(t => t.card)];
       
@@ -662,6 +736,7 @@ const App: React.FC = () => {
                   winner: final.roundInfo.winnerId,
                   contractStatus: final.roundInfo.status,
                   bidTaker: prev.bidTaker!,
+                  contractType: prev.contractType,
                   details: final
               });
               nextState.lastRoundBreakdown = final;
@@ -671,9 +746,9 @@ const App: React.FC = () => {
   };
 
   const calculateFinalScores = (state: GameState): LastRoundData => {
-      const { players, bidTaker, trumpSuit } = state;
-      const hCardPoints = players.hero.capturedCards.reduce((s, c) => s + getCardPoints(c, trumpSuit), 0);
-      const oCardPoints = players.opponent.capturedCards.reduce((s, c) => s + getCardPoints(c, trumpSuit), 0);
+      const { players, bidTaker, trumpSuit, contractType } = state;
+      const hCardPoints = players.hero.capturedCards.reduce((s, c) => s + getCardPoints(c, trumpSuit, contractType), 0);
+      const oCardPoints = players.opponent.capturedCards.reduce((s, c) => s + getCardPoints(c, trumpSuit, contractType), 0);
       const hTricks = players.hero.capturedCards.length / 2;
       const oTricks = players.opponent.capturedCards.length / 2;
       const isHeroCapot = hTricks === 9;
@@ -691,8 +766,12 @@ const App: React.FC = () => {
       const oBelote = oDeclList.some(c => c.type === 'BELOTE') ? 20 : 0;
       let hRawTotal = hCardPoints + hLast + hDeclPoints;
       let oRawTotal = oCardPoints + oLast + oDeclPoints;
+      
+      const MAX_POINTS = 162; // 152 + 10 Last
+
       if (isHeroCapot) hRawTotal = 252 + hDeclPoints;
       if (isOppCapot) oRawTotal = 252 + oDeclPoints;
+      
       let hFinal = 0;
       let oFinal = 0;
       let status: 'NORMAL' | 'DEDANS' | 'CAPOT' = 'NORMAL';
@@ -710,7 +789,7 @@ const App: React.FC = () => {
           } else {
               status = 'DEDANS';
               hFinal = hBelote; 
-              const totalGamePoints = 162 + (hDeclPoints - hBelote) + (oDeclPoints - oBelote);
+              const totalGamePoints = MAX_POINTS + (hDeclPoints - hBelote) + (oDeclPoints - oBelote);
               oFinal = totalGamePoints + oBelote;
           }
       } else {
@@ -725,7 +804,7 @@ const App: React.FC = () => {
           } else {
               status = 'DEDANS';
               oFinal = oBelote;
-              const totalGamePoints = 162 + (hDeclPoints - hBelote) + (oDeclPoints - oBelote);
+              const totalGamePoints = MAX_POINTS + (hDeclPoints - hBelote) + (oDeclPoints - oBelote);
               hFinal = totalGamePoints + hBelote;
           }
       }
@@ -755,6 +834,7 @@ const App: React.FC = () => {
               trump: trumpSuit,
               bidTaker: bidTaker!,
               status,
+              contractType: contractType,
               winnerId
           }
       };
@@ -764,8 +844,16 @@ const App: React.FC = () => {
   const isRound2Obligation = gameState.bidRound === 2 && gameState.dealerId === gameState.currentPlayerId;
   const mustPick = isJackObligation || isRound2Obligation;
   
+  const heroValidMoves = (gameState.currentPlayerId === 'hero' && gameState.phase === 'PLAYING')
+      ? gameState.players.hero.hand.filter(c => canPlayCard(gameState.players.hero.hand, c, gameState.currentTrick, gameState.trumpSuit, gameState.contractType))
+      : [];
+      
   const hasDeclarableCombos = gameState.players.hero.combinations.some(c => c.type !== 'BELOTE');
-  const canAnnounce = gameState.phase === 'PLAYING' && gameState.trickCount === 0 && gameState.currentPlayerId === 'hero' && hasDeclarableCombos && !gameState.players.hero.declaredCombinations.length && declarationTimer !== null;
+  const canDeclare = gameState.phase === 'PLAYING' && 
+                     gameState.trickCount === 0 && 
+                     gameState.currentPlayerId === 'hero' && 
+                     hasDeclarableCombos && 
+                     !declarationComplete;
 
   // Recovery Handler
   const handleStateSync = (serverState: GameState) => {
@@ -776,7 +864,6 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary onReset={() => startNewGame(false)}>
         <ConnectionManager gameState={gameState} onSync={handleStateSync}>
-            {/* Updated root with dynamic height */}
             <div className="w-full h-[100dvh] overflow-hidden relative bg-black">
                 <A11yAnnouncer message={gameState.a11yAnnouncement} />
                 
@@ -799,76 +886,53 @@ const App: React.FC = () => {
                 <Table 
                     gameState={gameState} 
                     onPlayCard={(c) => handlePlayCard(c, 'hero')}
-                    validMoves={gameState.currentPlayerId === 'hero' && gameState.phase === 'PLAYING' 
-                        ? gameState.players.hero.hand.filter(c => canPlayCard(gameState.players.hero.hand, c, gameState.currentTrick, gameState.trumpSuit))
-                        : []}
+                    validMoves={heroValidMoves}
                     settings={settings}
                     onUpdateSettings={updateSettings}
-                    onForfeit={() => startNewGame(true)} 
+                    onForfeit={() => startNewGame(true)}
                     showDeclarationModal={showDeclarationModal}
                     onDeclareCombinations={handleDeclareCombinations}
                     heroCombinations={gameState.players.hero.combinations}
-                    timeLeft={declarationTimer ?? undefined}
+                    timeLeft={declarationTimer || undefined}
                     beloteIds={fxState.beloteIds}
-                    
-                    // Sheet Triggers
                     onOpenHistory={() => setShowHistory(true)}
                     onOpenChat={() => setShowChat(true)}
                     onOpenSettings={() => setShowSettings(true)}
                     onOpenRules={() => setShowRules(true)}
-
-                    // Manual Proof
                     onShowCombinations={handleShowCombinations}
+                    canDeclare={canDeclare}
+                    onOpenDeclaration={() => setShowDeclarationModal(true)}
+                    candidateRejected={candidateRejected}
+                    onDistributionComplete={handleDistributionComplete}
                 />
 
-                {canAnnounce && (
-                    <div className="absolute bottom-[240px] right-4 lg:bottom-32 lg:right-8 z-[110] animate-scale-in">
-                        <button 
-                            onClick={() => setShowDeclarationModal(true)}
-                            className="btn-base bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-900 font-bold py-3 px-8 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.5)] border border-yellow-300 flex items-center gap-2 group min-h-[48px]"
-                        >
-                            <StarIcon />
-                            <span>Announce! ({declarationTimer}s)</span>
-                        </button>
-                    </div>
-                )}
-
-                {gameState.phase === 'BIDDING' && gameState.currentPlayerId === 'hero' && (
+                {/* MODALS & OVERLAYS */}
+                
+                {gameState.phase === 'BIDDING' && gameState.candidateCard && (
                     <BiddingControls 
-                        candidateCard={gameState.candidateCard!}
+                        candidateCard={gameState.candidateCard}
                         onTake={handleTake}
                         onPass={handlePass}
                         bidRound={gameState.bidRound}
-                        mustPick={mustPick} 
+                        mustPick={mustPick}
                     />
                 )}
 
-                {gameState.phase === 'SCORING' && gameState.lastRoundBreakdown && (
-                    <RoundResultModal 
-                        data={gameState.lastRoundBreakdown}
-                        onNext={() => startNewGame(false)}
+                {gameState.lastRoundBreakdown && gameState.phase === 'SCORING' && (
+                     <RoundResultModal 
+                        data={gameState.lastRoundBreakdown} 
+                        onNext={() => startNewGame()} 
                         currentScores={{ hero: gameState.players.hero.score, opponent: gameState.players.opponent.score }}
                         target={gameState.gameTarget}
-                    />
+                     />
                 )}
 
-                <HistoryPanel 
-                    isOpen={showHistory} 
-                    onClose={() => setShowHistory(false)} 
-                    history={gameState.roundHistory} 
-                />
-                
-                <ChatSheet
-                    isOpen={showChat}
-                    onClose={() => setShowChat(false)}
-                    onEmote={handleEmote}
-                />
-
+                {/* SHEETS */}
+                <HistoryPanel isOpen={showHistory} onClose={() => setShowHistory(false)} history={gameState.roundHistory} />
+                <ChatSheet isOpen={showChat} onClose={() => setShowChat(false)} onEmote={handleEmote} />
                 {showSettings && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setShowSettings(false)} />}
+                {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
-                {showRules && (
-                    <RulesModal onClose={() => setShowRules(false)} />
-                )}
             </div>
         </ConnectionManager>
     </ErrorBoundary>

@@ -1,5 +1,6 @@
-import { Card, Combination, Rank, Suit, TrickCard, Difficulty } from '../types';
-import { CARD_VALUES, ORDER_NON_TRUMP, ORDER_TRUMP, RANKS, SUITS, VISUAL_SORT_ORDER } from '../constants';
+
+import { Card, Combination, Rank, Suit, TrickCard, Difficulty, ContractType } from '../types';
+import { CARD_VALUES, CARD_VALUES_NO_TRUMP, ORDER_NON_TRUMP, ORDER_TRUMP, ORDER_NO_TRUMP_MODE, RANKS, SUITS, VISUAL_SORT_ORDER, COMBO_RANK_ORDER } from '../constants';
 
 // --- Deck Management ---
 
@@ -24,17 +25,41 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
 
 // --- Values & Power ---
 
-// Visual Order for COMBINATIONS only: A > K > Q > J > 10 > 9
-// 9 is lowest (index 0), A is highest (index 5)
-const COMBO_RANK_ORDER: Rank[] = ['9', '10', 'J', 'Q', 'K', 'A'];
-
-export const getCardPoints = (card: Card, trumpSuit: Suit | null): number => {
+export const getCardPoints = (card: Card, trumpSuit: Suit | null, contractType: ContractType = 'TRUMP'): number => {
+  // STRICT FIX for No Trump Scoring (Target: 162 Points Total)
+  if (contractType === 'NO_TRUMP') {
+      switch(card.rank) {
+          case 'A': return 19; // CRITICAL FIX: Was 11 in standard mode
+          case '10': return 10;
+          case 'K': return 4;
+          case 'Q': return 3;
+          case 'J': return 2;
+          case '9': return 0;
+          default: return 0;
+      }
+  }
+  
   if (!trumpSuit) return 0;
   const isTrump = card.suit === trumpSuit;
   return isTrump ? CARD_VALUES[card.rank].trump : CARD_VALUES[card.rank].nonTrump;
 };
 
-export const getCardPower = (card: Card, trumpSuit: Suit | null, leadSuit: Suit | null): number => {
+export const getCardPower = (
+    card: Card, 
+    trumpSuit: Suit | null, 
+    leadSuit: Suit | null, 
+    contractType: ContractType = 'TRUMP'
+): number => {
+  if (contractType === 'NO_TRUMP') {
+      // In No Trump, hierarchy matches Non-Trump (A > 10 > K > Q > J > 9)
+      // Only Lead Suit matters
+      if (card.suit === leadSuit) {
+          return 100 + ORDER_NO_TRUMP_MODE.indexOf(card.rank);
+      }
+      return ORDER_NO_TRUMP_MODE.indexOf(card.rank);
+  }
+
+  // TRUMP Mode Logic
   if (!trumpSuit) return 0;
   
   const isTrump = card.suit === trumpSuit;
@@ -49,7 +74,7 @@ export const getCardPower = (card: Card, trumpSuit: Suit | null, leadSuit: Suit 
   }
 };
 
-export const getWinningCard = (trick: TrickCard[], trumpSuit: Suit): TrickCard | null => {
+export const getWinningCard = (trick: TrickCard[], trumpSuit: Suit | null, contractType: ContractType = 'TRUMP'): TrickCard | null => {
   if (trick.length === 0) return null;
   
   let winner = trick[0];
@@ -57,8 +82,8 @@ export const getWinningCard = (trick: TrickCard[], trumpSuit: Suit): TrickCard |
 
   for (let i = 1; i < trick.length; i++) {
     const challenger = trick[i];
-    const winnerPower = getCardPower(winner.card, trumpSuit, leadSuit);
-    const challengerPower = getCardPower(challenger.card, trumpSuit, leadSuit);
+    const winnerPower = getCardPower(winner.card, trumpSuit, leadSuit, contractType);
+    const challengerPower = getCardPower(challenger.card, trumpSuit, leadSuit, contractType);
 
     if (challengerPower > winnerPower) {
       winner = challenger;
@@ -73,9 +98,26 @@ export const canPlayCard = (
   hand: Card[],
   cardToPlay: Card,
   currentTrick: TrickCard[],
-  trumpSuit: Suit | null
+  trumpSuit: Suit | null,
+  contractType: ContractType = 'TRUMP'
 ): boolean => {
   if (currentTrick.length === 0) return true;
+  
+  // No Trump Logic
+  if (contractType === 'NO_TRUMP') {
+      const opponentPlay = currentTrick[0].card;
+      const leadSuit = opponentPlay.suit;
+      const hasLeadSuit = hand.some(c => c.suit === leadSuit);
+      
+      // Must follow suit if possible
+      if (hasLeadSuit) {
+          if (cardToPlay.suit !== leadSuit) return false;
+      }
+      // If void, can play any card. No trumping obligation because there are no trumps.
+      return true;
+  }
+
+  // Standard Trump Logic
   if (!trumpSuit) return true;
 
   const opponentPlay = currentTrick[0].card;
@@ -90,9 +132,9 @@ export const canPlayCard = (
     
     // Rule: If Lead Suit IS Trump, MUST Over-trump if possible
     if (leadSuit === trumpSuit) {
-        const opponentPower = getCardPower(opponentPlay, trumpSuit, leadSuit);
-        const myPower = getCardPower(cardToPlay, trumpSuit, leadSuit);
-        const canBeat = hand.some(c => c.suit === trumpSuit && getCardPower(c, trumpSuit, leadSuit) > opponentPower);
+        const opponentPower = getCardPower(opponentPlay, trumpSuit, leadSuit, 'TRUMP');
+        const myPower = getCardPower(cardToPlay, trumpSuit, leadSuit, 'TRUMP');
+        const canBeat = hand.some(c => c.suit === trumpSuit && getCardPower(c, trumpSuit, leadSuit, 'TRUMP') > opponentPower);
         if (canBeat && myPower <= opponentPower) return false;
     }
     return true;
@@ -100,6 +142,7 @@ export const canPlayCard = (
 
   // 2. If Void in Lead Suit
   if (leadSuit !== trumpSuit) {
+      // Must Trump if possible
       if (hasTrump) {
           if (cardToPlay.suit !== trumpSuit) return false;
           return true;
@@ -112,7 +155,7 @@ export const canPlayCard = (
 
 // --- Combinations Finder ---
 
-export const calculateCombinations = (hand: Card[], trumpSuit: Suit): Combination[] => {
+export const calculateCombinations = (hand: Card[], trumpSuit: Suit | null, contractType: ContractType = 'TRUMP'): Combination[] => {
     let rawCombos: Combination[] = [];
 
     // 1. CARRE (4 of a kind)
@@ -121,38 +164,50 @@ export const calculateCombinations = (hand: Card[], trumpSuit: Suit): Combinatio
         const cards = hand.filter(c => c.rank === rank);
         if (cards.length === 4) {
             let points = 100;
-            if (rank === 'J') points = 200;
-            else if (rank === '9') points = 140; 
-            else if (rank === 'A') points = 110; 
-            else points = 100;
             
-            rawCombos.push({
-                id: `carre-${rank}`,
-                type: 'CARRE',
-                cards: cards,
-                score: points,
-                heightValue: COMBO_RANK_ORDER.indexOf(rank as Rank), 
-                rank: rank as Rank,
-                isTrump: false 
-            });
+            if (contractType === 'TRUMP') {
+                if (rank === 'J') points = 200;
+                else if (rank === '9') points = 140; 
+                else if (rank === 'A') points = 110; 
+                else points = 100;
+            } else {
+                // No Trump Mode Values
+                if (rank === 'A') points = 190;
+                else if (rank === '9') points = 0; // 4 Nines are worth 0 in No Trump
+                else points = 100;
+            }
+            
+            if (points > 0) {
+                rawCombos.push({
+                    id: `carre-${rank}`,
+                    type: 'CARRE',
+                    cards: cards,
+                    score: points,
+                    heightValue: COMBO_RANK_ORDER.indexOf(rank as Rank), 
+                    rank: rank as Rank,
+                    isTrump: false 
+                });
+            }
         }
     });
 
     // 2. SEQUENCES
+    const effectiveTrump = contractType === 'TRUMP' ? trumpSuit : null;
+
     SUITS.forEach(suit => {
+        // Sort cards High to Low based on Sequence Order (A, K, Q, J, 10, 9)
         const suitCards = hand.filter(c => c.suit === suit)
             .sort((a, b) => COMBO_RANK_ORDER.indexOf(b.rank) - COMBO_RANK_ORDER.indexOf(a.rank));
         
-        // Use a set to track cards already used in longer sequences to avoid sub-sequences
-        // E.g. If A-K-Q-J-10 (100) is found, don't report A-K-Q-J (50)
         const usedInSeq = new Set<string>();
 
-        // Check lengths 5, 4, 3
+        // Check for lengths 5 down to 3 (Hundred, Fifty, Tierce)
         for (let len = 5; len >= 3; len--) {
             const seqs = findSequences(suitCards, len);
             
             seqs.forEach(seq => {
-                // Check if any card in this sequence is already part of a longer declared sequence
+                // Only add if no card in this sequence is already used in a larger sequence
+                // (Though usually we want greedy largest first, looping 5->3 does this)
                 const isSubset = seq.some(c => usedInSeq.has(c.id));
                 
                 if (!isSubset) {
@@ -170,10 +225,9 @@ export const calculateCombinations = (hand: Card[], trumpSuit: Suit): Combinatio
                         score,
                         heightValue,
                         rank: seq[0].rank,
-                        isTrump: suit === trumpSuit
+                        isTrump: suit === effectiveTrump
                     });
 
-                    // Mark these cards as consumed by a sequence
                     seq.forEach(c => usedInSeq.add(c.id));
                 }
             });
@@ -181,19 +235,21 @@ export const calculateCombinations = (hand: Card[], trumpSuit: Suit): Combinatio
     });
 
     // 3. BELOTE (King + Queen of Trump)
-    const kTrump = hand.find(c => c.suit === trumpSuit && c.rank === 'K');
-    const qTrump = hand.find(c => c.suit === trumpSuit && c.rank === 'Q');
-    
-    if (kTrump && qTrump) {
-        rawCombos.push({
-            id: 'belote',
-            type: 'BELOTE',
-            cards: [kTrump, qTrump],
-            score: 20,
-            heightValue: 0,
-            rank: 'K',
-            isTrump: true
-        });
+    if (contractType === 'TRUMP' && trumpSuit) {
+        const kTrump = hand.find(c => c.suit === trumpSuit && c.rank === 'K');
+        const qTrump = hand.find(c => c.suit === trumpSuit && c.rank === 'Q');
+        
+        if (kTrump && qTrump) {
+            rawCombos.push({
+                id: 'belote',
+                type: 'BELOTE',
+                cards: [kTrump, qTrump],
+                score: 20,
+                heightValue: 0,
+                rank: 'K',
+                isTrump: true
+            });
+        }
     }
 
     return rawCombos;
@@ -215,6 +271,7 @@ const findSequences = (cards: Card[], length: number): Card[][] => {
             const idxPrev = COMBO_RANK_ORDER.indexOf(prev.rank);
             const idxCurr = COMBO_RANK_ORDER.indexOf(curr.rank);
             
+            // Check for strict adjacency in rank order (e.g. 5 - 4 = 1)
             if (idxPrev - idxCurr === 1) {
                 currentSeq.push(curr);
             } else {
@@ -266,6 +323,7 @@ export const solveCombinationConflicts = (allCombos: Combination[]): Combination
     const usedCardIds = new Set<string>();
 
     for (const combo of sorted) {
+        // Check if any card in this combo is already used by a PREVIOUSLY selected combo (higher priority)
         const overlaps = combo.cards.some(c => usedCardIds.has(c.id));
         
         if (!overlaps) {
@@ -358,16 +416,34 @@ export const getBotBidDecision = (
     candidate: Card,
     bidRound: 1 | 2,
     difficulty: Difficulty
-): { action: 'take', suit: Suit } | { action: 'pass' } => {
-    const score = evaluateHandStrength([...hand, candidate], candidate.suit);
-    if (score > 40) return { action: 'take', suit: candidate.suit };
+): { action: 'take', suit: Suit | null, contract: ContractType } | { action: 'pass' } => {
+    // Basic bot implementation: Evaluate standard trump strength
+    const trumpScore = evaluateHandStrength(hand, candidate.suit, 'TRUMP');
+    
+    if (trumpScore > 40) return { action: 'take', suit: candidate.suit, contract: 'TRUMP' };
+    
+    // Simple No Trump check
+    const ntScore = evaluateHandStrength(hand, null, 'NO_TRUMP');
+    if (ntScore > 45 && bidRound === 2) return { action: 'take', suit: null, contract: 'NO_TRUMP' };
+
     return { action: 'pass' };
 };
 
-export const evaluateHandStrength = (hand: Card[], potentialTrump: Suit): number => {
+export const evaluateHandStrength = (hand: Card[], potentialTrump: Suit | null, contractType: ContractType = 'TRUMP'): number => {
     let score = 0;
+    
+    if (contractType === 'NO_TRUMP') {
+        hand.forEach(c => {
+             // A=19, 10=10, K=4...
+             const pts = CARD_VALUES_NO_TRUMP[c.rank];
+             score += pts;
+        });
+        return score;
+    }
+
+    // Trump Mode
     hand.forEach(c => {
-        if (c.suit === potentialTrump) {
+        if (potentialTrump && c.suit === potentialTrump) {
             if (c.rank === 'J') score += 20;
             else if (c.rank === '9') score += 14;
             else if (c.rank === 'A') score += 6;
@@ -384,17 +460,26 @@ export const getBotMove = (
     hand: Card[], 
     trick: TrickCard[], 
     trumpSuit: Suit | null,
+    contractType: ContractType,
     difficulty: Difficulty,
     playedCards: Card[] = []
 ): Card => {
-    const validMoves = hand.filter(c => canPlayCard(hand, c, trick, trumpSuit));
+    const validMoves = hand.filter(c => canPlayCard(hand, c, trick, trumpSuit, contractType));
+    
+    // Simple: play highest power valid card
+    if (validMoves.length > 0) {
+        // Sort by power descending
+        const leadSuit = trick.length > 0 ? trick[0].card.suit : null;
+        return validMoves.sort((a,b) => getCardPower(b, trumpSuit, leadSuit, contractType) - getCardPower(a, trumpSuit, leadSuit, contractType))[0];
+    }
+
     return validMoves[0] || hand[0];
 };
 
-export const sortHand = (hand: Card[], trumpSuit: Suit | null = null): Card[] => {
+export const sortHand = (hand: Card[], trumpSuit: Suit | null = null, contractType: ContractType = 'TRUMP'): Card[] => {
   return [...hand].sort((a, b) => {
-    // 1. Trump Priority
-    if (trumpSuit) {
+    // 1. Trump Priority (only in Trump Mode)
+    if (contractType === 'TRUMP' && trumpSuit) {
         const aIsTrump = a.suit === trumpSuit;
         const bIsTrump = b.suit === trumpSuit;
         

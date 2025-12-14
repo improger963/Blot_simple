@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState, memo, useRef } from 'react';
 import { GamePhase, Notification, RoundResult, GameSettings, Player, LastRoundData, Combination, ScoreBreakdown } from '../types';
 import { SUIT_COLORS, SUIT_SYMBOLS } from '../constants';
 import { motion, AnimatePresence, PanInfo, Variants } from 'framer-motion';
 import { Z_INDEX } from '../utils/uiLogic';
 import { useSoundManager } from '../hooks/useSoundManager';
+import { ActionBubble, BubbleVariant, BubblePosition } from './ActionBubble';
 
 // --- ICONS ---
 export const Icons = {
@@ -221,15 +223,15 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
     const TOTAL_TIME = 30;
     const [timer, setTimer] = useState(TOTAL_TIME);
     const [lastScore, setLastScore] = useState(player.roundScore);
-    const [feedback, setFeedback] = useState<string | null>(null);
+    const [scoreFeedback, setScoreFeedback] = useState<string | null>(null);
+    const [actionText, setActionText] = useState<string | null>(null);
+    const [actionVariant, setActionVariant] = useState<BubbleVariant>('standard');
     const [showParticles, setShowParticles] = useState(false);
     const lastActionRef = useRef<string | null | undefined>(null);
-    const lastTickRef = useRef<number>(TOTAL_TIME);
     
     useEffect(() => {
         if (!isActive) { 
             setTimer(TOTAL_TIME); 
-            lastTickRef.current = TOTAL_TIME;
             return; 
         }
         
@@ -253,7 +255,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
     useEffect(() => {
         if (player.roundScore > lastScore) {
             const diff = player.roundScore - lastScore;
-            setFeedback(`+${diff}`);
+            setScoreFeedback(`+${diff}`);
             setShowParticles(true);
             const t = setTimeout(() => setShowParticles(false), 1000);
             setLastScore(player.roundScore);
@@ -265,9 +267,22 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
 
     useEffect(() => {
         if (player.lastAction && player.lastAction !== lastActionRef.current) {
-            setFeedback(player.lastAction);
-            setShowParticles(true);
-            const t = setTimeout(() => setShowParticles(false), 1000);
+            const txt = player.lastAction;
+            setActionText(txt);
+
+            // Determine variant based on content
+            const lower = txt.toLowerCase();
+            let variant: BubbleVariant = 'standard';
+            if (lower.includes('belote') || lower.includes('rebelote')) variant = 'gold';
+            else if (lower.includes('tierce') || lower.includes('fifty') || lower.includes('hundred')) variant = 'blue';
+            else if (lower.includes('carre')) variant = 'purple';
+            else if (lower.includes('pass')) variant = 'gray';
+            
+            setActionVariant(variant);
+
+            // Hide after duration
+            const duration = 2500;
+            const t = setTimeout(() => setActionText(null), duration);
             return () => clearTimeout(t);
         }
         lastActionRef.current = player.lastAction;
@@ -282,6 +297,9 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
     const strokeWidth = 5;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (timer / TOTAL_TIME) * circumference;
+    
+    // Bubble Position Logic: Hero (Bottom Left) -> Top Right, Opponent (Top Right) -> Bottom Left
+    const bubblePos: BubblePosition = isHero ? 'top-right' : 'bottom-left';
 
     return (
         <motion.div 
@@ -297,15 +315,25 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
         >
             <div className="relative flex items-center justify-center">
                 <WinParticles active={showParticles} color={isHero ? '#34d399' : '#f43f5e'} />
+                
+                {/* Score Feedback (Floating Numbers) */}
                 <AnimatePresence>
-                    {feedback && (
+                    {scoreFeedback && (
                         <FloatingFeedback 
-                            text={feedback} 
+                            text={scoreFeedback} 
                             color={isHero ? '#34d399' : '#f43f5e'} 
-                            onComplete={() => setFeedback(null)} 
+                            onComplete={() => setScoreFeedback(null)} 
                         />
                     )}
                 </AnimatePresence>
+
+                {/* Game Action Bubble (Text) */}
+                <ActionBubble 
+                    text={actionText || ''} 
+                    isVisible={!!actionText} 
+                    variant={actionVariant} 
+                    position={bubblePos} 
+                />
 
                 <div className="relative w-28 h-28 flex items-center justify-center">
                     {isActive && isUrgent && (
@@ -478,12 +506,21 @@ export const SettingsModal: React.FC<{ settings: GameSettings; onUpdate: (s: Gam
     const toggle = (key: keyof GameSettings) => { if (typeof settings[key] === 'boolean') { onUpdate({ ...settings, [key]: !settings[key] }); } };
     const setDifficulty = (d: GameSettings['difficulty']) => onUpdate({ ...settings, difficulty: d });
     const setSpeed = (s: GameSettings['gameSpeed']) => onUpdate({ ...settings, gameSpeed: s });
+    const setTarget = (t: number) => onUpdate({ ...settings, targetScore: t });
 
     return (
         <Sheet isOpen={true} onClose={onClose} direction="top">
              <div className="p-6">
                  <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-white flex items-center gap-2"><Icons.Settings /> Settings</h2><button onClick={onClose} className="text-slate-400 hover:text-white p-2 bg-white/5 rounded-full"><Icons.Close /></button></div>
                  <div className="space-y-6">
+                     <div>
+                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Target Score</label>
+                         <div className="flex bg-slate-800 rounded-lg p-1 border border-white/5">
+                             {[51, 101, 201, 501].map(t => (
+                                 <button key={t} onClick={() => setTarget(t)} className={`flex-1 py-3 rounded-md text-xs font-bold uppercase transition-all ${settings.targetScore === t ? 'bg-amber-500 text-black shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{t}</button>
+                             ))}
+                         </div>
+                     </div>
                      <div><label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Difficulty</label><div className="flex bg-slate-800 rounded-lg p-1 border border-white/5">{(['beginner', 'intermediate', 'expert'] as const).map(d => (<button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-3 rounded-md text-xs font-bold uppercase transition-all ${settings.difficulty === d ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{d}</button>))}</div></div>
                      <div><label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Game Speed</label><div className="flex bg-slate-800 rounded-lg p-1 border border-white/5">{(['slow', 'normal', 'fast'] as const).map(s => (<button key={s} onClick={() => setSpeed(s)} className={`flex-1 py-3 rounded-md text-xs font-bold uppercase transition-all ${settings.gameSpeed === s ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{s}</button>))}</div></div>
                      <div className="space-y-4">
