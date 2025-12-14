@@ -11,8 +11,8 @@ interface BiddingControlsProps {
   mustPick: boolean;
 }
 
-const XIcon = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>;
-const CheckIcon = () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>;
+const XIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>;
+const CheckIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>;
 
 export const BiddingControls: React.FC<BiddingControlsProps> = ({
   candidateCard,
@@ -28,7 +28,7 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
   };
 
   return (
-    <div className="fixed bottom-[240px] md:bottom-[200px] left-0 right-0 z-[110] flex justify-center px-4 pointer-events-none">
+    <div className="fixed bottom-[300px] md:bottom-[340px] left-0 right-0 z-[110] flex justify-center px-4 pointer-events-none">
       <motion.div 
         initial="hidden"
         animate="visible"
