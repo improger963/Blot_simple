@@ -43,7 +43,7 @@ export const CardBack: React.FC<{ className?: string, shadow?: boolean }> = Reac
       
       {/* 3. Cross-Hatch Texture */}
       <div className="absolute inset-0 opacity-10" style={{
-          backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000)`,
+          backgroundImage: `linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000)`,
           backgroundSize: '4px 4px',
           backgroundPosition: '0 0, 2px 2px'
       }} />
@@ -165,7 +165,7 @@ export const CardComponent: React.FC<CardProps> = React.memo(({
   // --- Visual State Classes ---
   // Using ring shadows instead of borders for smoother rendering
   let stateEffects = '';
-  if (isPlayable) stateEffects = 'ring-2 ring-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)]';
+  // Removed green ring for playable cards
   if (isTrump) stateEffects = 'ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]';
   if (isHighlighted) stateEffects = 'ring-4 ring-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.6)] translate-y-[-10px]';
   if (isWinningComboCard) stateEffects = 'ring-4 ring-amber-300 shadow-[0_0_20px_rgba(252,211,77,0.8)]';
@@ -193,8 +193,8 @@ export const CardComponent: React.FC<CardProps> = React.memo(({
       }}
       className={`
         relative ${dimClasses} cursor-pointer
-        ${disabled ? 'brightness-95 cursor-default' : ''}
-        ${isInvalid ? 'brightness-50 grayscale opacity-80 cursor-not-allowed' : ''}
+        ${disabled ? 'cursor-default' : ''}
+        ${isInvalid ? 'cursor-not-allowed' : ''}
         ${className}
       `}
     >
@@ -205,7 +205,6 @@ export const CardComponent: React.FC<CardProps> = React.memo(({
             card-paper-shadow
             card-texture-linen
             transition-all duration-200
-            border-[0.5px] border-black/10
             ${stateEffects}
         `}>
             
@@ -250,15 +249,7 @@ export const CardComponent: React.FC<CardProps> = React.memo(({
             
             {/* 3. Static Vignette / Dirt (Realism) */}
             <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(180,160,120,0.15)] rounded-xl pointer-events-none z-20" />
-
-            {/* Invalid State Overlay */}
-            {isInvalid && (
-                <div className="absolute inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-grayscale">
-                    <div className="bg-black/50 p-1.5 rounded-full border border-white/20">
-                        <svg className="w-5 h-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </div>
-                </div>
-            )}
+            
         </div>
     </motion.div>
   );

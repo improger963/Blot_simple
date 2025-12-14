@@ -3,6 +3,8 @@ import { Card, GameState, TrickCard, Combination, GameSettings } from '../types'
 import { CardComponent, CardBack } from './Card';
 import { PlayerAvatar, ScoreBoard, MobileScorePill, Icons } from './UI';
 import { CombinationControls } from './CombinationControls';
+import { OpponentRevealedCards } from './OpponentRevealedCards';
+import { TrumpBadge } from './TrumpBadge';
 import { SUIT_COLORS, SUIT_SYMBOLS } from '../constants';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { calculateFanTransform, Z_INDEX } from '../utils/uiLogic';
@@ -46,10 +48,16 @@ export const Table: React.FC<TableProps> = ({
     onOpenRules,
     onShowCombinations
 }) => {
-  const { players, currentTrick, trumpSuit, candidateCard, dealerId, phase, currentPlayerId, deck, trickCount } = gameState;
+  const { players, currentTrick, trumpSuit, candidateCard, dealerId, phase, currentPlayerId, deck, trickCount, bidTaker } = gameState;
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [selectedMobileCardId, setSelectedMobileCardId] = useState<string | null>(null);
   const [viewingDeclarationsPlayerId, setViewingDeclarationsPlayerId] = useState<'hero' | 'opponent' | null>(null);
+  
+  // New State for Opponent Reveal
+  const [showOpponentReveal, setShowOpponentReveal] = useState(false);
+  // Track if we've already triggered the reveal in Trick 2 to prevent re-triggering
+  const hasTriggeredTrick2Reveal = useRef(false);
+
   const mobileContainerRef = useRef<HTMLDivElement>(null);
   const prevHeroHandLength = useRef(0);
 
@@ -61,6 +69,40 @@ export const Table: React.FC<TableProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // --- Opponent Reveal Logic (Trigger) ---
+  useEffect(() => {
+    // RESET logic: If it's a new round (trickCount 0), reset the trigger
+    if (trickCount === 0) {
+        hasTriggeredTrick2Reveal.current = false;
+        setShowOpponentReveal(false);
+    }
+
+    // TRIGGER logic: 
+    // 1. Must be Trick 2 (index 1)
+    // 2. Must be Opponent's turn
+    // 3. Opponent must have Declarations (Non-Belote)
+    if (trickCount === 1 && currentPlayerId === 'opponent') {
+        const hasBonus = players.opponent.declaredCombinations.some(c => c.type !== 'BELOTE');
+        
+        if (hasBonus && !hasTriggeredTrick2Reveal.current) {
+            setShowOpponentReveal(true);
+            playSound('slide', { volume: 0.5 });
+            hasTriggeredTrick2Reveal.current = true;
+        }
+    }
+  }, [trickCount, currentPlayerId, players.opponent.declaredCombinations, playSound]);
+
+  // --- Auto-Hide Logic ---
+  useEffect(() => {
+      if (showOpponentReveal) {
+          const timer = setTimeout(() => {
+              setShowOpponentReveal(false);
+          }, 4000); // Hide after 4 seconds
+          return () => clearTimeout(timer);
+      }
+  }, [showOpponentReveal]);
+
 
   // --- Sound Logic: Dealing ---
   useEffect(() => {
@@ -107,6 +149,7 @@ export const Table: React.FC<TableProps> = ({
       return phase === 'PLAYING' && 
              trickCount === 1 && 
              currentPlayerId === 'hero' && 
+             // Ensure we check that the player has actually announced valid declarations (non-Belote)
              players.hero.declaredCombinations.some(c => c.type !== 'BELOTE') && 
              !players.hero.hasShownCombinations;
   }, [phase, trickCount, currentPlayerId, players.hero.declaredCombinations, players.hero.hasShownCombinations]);
@@ -179,7 +222,28 @@ export const Table: React.FC<TableProps> = ({
                 </div>
             )}
 
-            {/* --- DECK & TRUMP (CENTERED) --- */}
+            {/* --- TRUMP BADGE (Dynamic Position) --- */}
+            <AnimatePresence>
+                {phase !== 'BIDDING' && trumpSuit && bidTaker && (
+                    <motion.div
+                        layoutId="trump-badge"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className={`absolute z-[30] pointer-events-none
+                            ${bidTaker === 'hero' 
+                                ? 'bottom-32 left-4 md:bottom-28 md:left-32' // Hero: Above avatar on mobile, Right of avatar on desktop
+                                : 'top-28 right-4 md:top-28 md:right-32'     // Opponent: Below avatar on mobile, Left of avatar on desktop
+                            }
+                        `}
+                    >
+                        <TrumpBadge suit={trumpSuit} />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* --- DECK & CANDIDATE (CENTERED) --- */}
             <div className={`
                 absolute transition-all duration-500 z-[${Z_INDEX.DECK}]
                 top-[18%] left-4 scale-[0.75] origin-top-left
@@ -197,26 +261,8 @@ export const Table: React.FC<TableProps> = ({
                  )}
 
                  <div className="absolute top-0 left-28 md:left-32 flex flex-col items-center justify-center min-w-[100px]">
-                     {trumpSuit && (
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
-                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                            className="flex flex-col items-center gap-2"
-                        >
-                            <div className="relative group">
-                                <div className="absolute -inset-2 bg-gold/10 rounded-full blur-xl animate-pulse-slow"></div>
-                                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-b from-slate-800 to-slate-950 border-2 border-gold/30 flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-md relative z-10">
-                                    <span className={`text-4xl md:text-5xl drop-shadow-lg transform transition-transform group-hover:scale-110 ${
-                                        (trumpSuit === 'H' || trumpSuit === 'D') ? 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.6)]' : 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]'
-                                    }`}>
-                                        {SUIT_SYMBOLS[trumpSuit]}
-                                    </span>
-                                </div>
-                                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-600 to-amber-700 text-white text-[9px] font-black px-3 py-0.5 rounded shadow-lg uppercase tracking-widest border border-white/10 z-20 whitespace-nowrap">Trump</div>
-                            </div>
-                        </motion.div>
-                     )}
-
+                     {/* REMOVED: Static Trump Circle. Now using TrumpBadge above. */}
+                     
                      {candidateCard && phase === 'BIDDING' && (
                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-0">
                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/60 text-white/80 text-[10px] font-bold px-2 py-1 rounded border border-white/10 backdrop-blur-sm">Candidate</div>
@@ -328,6 +374,12 @@ export const Table: React.FC<TableProps> = ({
                     </AnimatePresence>
                  </div>
             </div>
+
+            {/* --- OPPONENT REVEALED CARDS (ON-TABLE DECLARATION) --- */}
+            <OpponentRevealedCards 
+                combinations={players.opponent.declaredCombinations}
+                visible={showOpponentReveal}
+            />
             
             {/* --- PLAYER HAND (MOBILE SCROLL SNAP CAROUSEL) --- */}
             {isMobile ? (
@@ -447,7 +499,7 @@ export const Table: React.FC<TableProps> = ({
 
             {/* --- MANUAL COMBINATION PROOF BUTTON --- */}
             {canShowCombinations && onShowCombinations && (
-                <div className="absolute bottom-[230px] md:bottom-[280px] left-0 right-0 z-[120] flex justify-center pointer-events-none">
+                <div className="absolute bottom-[200px] md:bottom-[280px] left-0 right-0 z-[120] flex justify-center pointer-events-none">
                     <motion.button
                         initial={{ scale: 0, y: 20 }}
                         animate={{ scale: 1, y: 0 }}
@@ -459,7 +511,7 @@ export const Table: React.FC<TableProps> = ({
                     >
                         <span className="text-xl">🎴</span>
                         <div className="flex flex-col items-start leading-none">
-                            <span>ПОКАЗАТЬ</span>
+                            <span>SHOW</span>
                             <span className="text-[10px] opacity-80 uppercase tracking-widest mt-0.5">Combinations</span>
                         </div>
                         <div className="bg-black/20 rounded-full px-2 py-0.5 text-xs font-bold ml-1">

@@ -252,6 +252,13 @@ const App: React.FC = () => {
            }
 
            if (opponentCombos.length > 0) {
+               const nonBeloteNames = opponentCombos
+                   .filter(c => c.type !== 'BELOTE')
+                   .map(c => c.type)
+                   .join(', ');
+                   
+               const msg = nonBeloteNames ? `Announced: ${nonBeloteNames}` : "";
+
                setGameState(prev => ({
                     ...prev,
                     players: {
@@ -259,10 +266,11 @@ const App: React.FC = () => {
                         opponent: { 
                             ...prev.players.opponent, 
                             declaredCombinations: opponentCombos,
-                            hasShownCombinations: true 
+                            hasShownCombinations: true,
+                            lastAction: msg // Set text bubble
                         }
                     },
-                    declarations: [...prev.declarations, "Opponent declared combination."]
+                    declarations: msg ? [...prev.declarations, msg] : prev.declarations
                }));
            } else {
                setGameState(prev => ({
@@ -512,7 +520,7 @@ const App: React.FC = () => {
                     }
                 }
             }));
-            addNotification('error', 'Комбинация сгорела! Вы забыли показать её.'); // Russian text as requested
+            addNotification('error', 'Declarations Voided'); 
             playSound('place_opp_3'); // Thud sound
             triggerHaptic('error');
         }
@@ -609,26 +617,25 @@ const App: React.FC = () => {
           nextState.players[winnerId].capturedCards = newCaptured;
 
           if (prev.trickCount === 0) { 
-              const heroDecl = prev.players.hero.hasShownCombinations ? prev.players.hero.declaredCombinations : [];
+              const heroDecl = prev.players.hero.declaredCombinations; // Compare declared, not just shown
               const oppDecl = prev.players.opponent.declaredCombinations; 
               const firstPlayer = prev.currentTrick[0].playerId;
               const result = compareDeclarations(heroDecl, oppDecl, firstPlayer);
 
-              if (result.winner === 'hero' && result.heroPoints > 0) {
-                  const showable = heroDecl.filter(c => c.type !== 'BELOTE');
-                  if (showable.length > 0) {
-                      // Logic handled by manual show or auto-calc, but just log here
-                  } else {
-                      if (result.heroPoints > 20) addNotification('success', `Your Declarations Win! (+${result.heroPoints})`);
+              if (result.winner === 'hero') {
+                  // Hero Wins: Void Opponent Declarations (except Belote)
+                  nextState.players.opponent.declaredCombinations = nextState.players.opponent.declaredCombinations.filter(c => c.type === 'BELOTE');
+                  
+                  if (result.heroPoints > 0) {
+                      addNotification('success', `Your Declarations are Good! Show them now.`);
                   }
-              } else if (result.winner === 'opponent' && result.oppPoints > 0) {
-                  const showable = oppDecl.filter(c => c.type !== 'BELOTE');
-                  if (showable.length > 0) {
-                      const msg = showable.map(c => `${c.type} (${c.score})`).join(', ');
-                      addNotification('warning', `Opponent revealed: ${msg}`);
-                      nextState.declarations.push(`Opp revealed: ${msg}`);
-                  } else {
-                       if (result.oppPoints > 20) addNotification('error', `Opponent Declarations Win! (+${result.oppPoints})`);
+              } else if (result.winner === 'opponent') {
+                  // Opponent Wins: Void Hero Declarations (except Belote)
+                  nextState.players.hero.declaredCombinations = nextState.players.hero.declaredCombinations.filter(c => c.type === 'BELOTE');
+                  
+                  // Notify about Opponent win
+                  if (result.oppPoints > 0) {
+                      addNotification('warning', `Opponent Declarations are Good.`);
                   }
               }
           }

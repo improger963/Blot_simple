@@ -230,8 +230,8 @@ export const CombinationControls: React.FC<CombinationControlsProps> = ({ combin
                                                     <div 
                                                         key={`${c.id}-${idx}`} 
                                                         className={`
-                                                            w-8 h-10 bg-white rounded shadow-sm border border-slate-300 flex flex-col items-center justify-center leading-none
-                                                            ${isSelected ? 'ring-1 ring-gold/70 translate-y-[-1px]' : 'ring-1 ring-black/5'}
+                                                            w-8 h-10 bg-white rounded shadow-md flex flex-col items-center justify-center leading-none
+                                                            ${isSelected ? 'ring-1 ring-gold/70 translate-y-[-1px]' : ''}
                                                             transition-transform
                                                         `}
                                                         style={{ zIndex: 10 - idx }}
