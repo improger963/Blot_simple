@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Suit } from '../types';
 import { SUIT_SYMBOLS } from '../constants';
@@ -36,9 +35,9 @@ export const TrumpBadge: React.FC<TrumpBadgeProps> = ({ suit, isNoTrump = false 
             {/* Icon */}
             <span className={`
                 text-3xl md:text-4xl font-black drop-shadow-[0_2px_0_rgba(0,0,0,0.5)] transform transition-transform group-hover:scale-110
-                ${isNoTrump ? 'text-indigo-300' : (isRed ? 'text-red-500' : 'text-slate-200')}
+                ${isNoTrump ? 'text-indigo-300 font-serif' : (isRed ? 'text-red-500' : 'text-slate-200')}
             `}>
-                {isNoTrump ? 'Ø' : (suit && SUIT_SYMBOLS[suit])}
+                {isNoTrump ? 'A' : (suit && SUIT_SYMBOLS[suit])}
             </span>
        </div>
 

@@ -1,31 +1,31 @@
 
-import React, { useEffect, useState, memo, useRef } from 'react';
-import { GamePhase, Notification, RoundResult, GameSettings, Player, LastRoundData, Combination, ScoreBreakdown } from '../types';
-import { SUIT_COLORS, SUIT_SYMBOLS } from '../constants';
-import { motion, AnimatePresence, PanInfo, Variants } from 'framer-motion';
+import React, { useEffect, useState, memo, useRef, useCallback } from 'react';
+import { GameSettings, Player, RoundResult } from '../types';
+import { SUIT_SYMBOLS } from '../constants';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { Z_INDEX } from '../utils/uiLogic';
 import { useSoundManager } from '../hooks/useSoundManager';
 import { ActionBubble, BubbleVariant, BubblePosition } from './ActionBubble';
 
-// --- ICONS ---
+// --- ICONS (Pure Components) ---
 export const Icons = {
-    Success: () => <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
-    Warning: () => <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
-    Error: () => <svg className="w-5 h-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    Info: () => <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    Close: () => <svg className="w-5 h-5 text-slate-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
-    Coin: () => <svg className="w-4 h-4 text-gold" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" /></svg>,
-    Trophy: () => <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    ChevronDown: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
-    Settings: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-    Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
-    History: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    Chat: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+    Success: memo(() => <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>),
+    Warning: memo(() => <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>),
+    Error: memo(() => <svg className="w-5 h-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
+    Info: memo(() => <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
+    Close: memo(() => <svg className="w-5 h-5 text-slate-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>),
+    Coin: memo(() => <svg className="w-4 h-4 text-gold" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" /></svg>),
+    Trophy: memo(() => <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
+    ChevronDown: memo(() => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>),
+    Settings: memo(() => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>),
+    Menu: memo(() => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>),
+    History: memo(() => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
+    Chat: memo(() => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>)
 };
 
-export const A11yAnnouncer: React.FC<{ message: string }> = ({ message }) => (
+export const A11yAnnouncer: React.FC<{ message: string }> = memo(({ message }) => (
     <div className="sr-only" role="status" aria-live="polite">{message}</div>
-);
+));
 
 // --- UTILS ---
 export const CountUp: React.FC<{ value: number, duration?: number, className?: string }> = memo(({ value, duration = 800, className }) => {
@@ -34,27 +34,34 @@ export const CountUp: React.FC<{ value: number, duration?: number, className?: s
     useEffect(() => {
         let startTime: number;
         let startValue = displayValue;
+        let animationFrameId: number;
+
         const step = (timestamp: number) => {
             if (!startTime) startTime = timestamp;
             const progress = Math.min((timestamp - startTime) / duration, 1);
             setDisplayValue(Math.floor(startValue + progress * (value - startValue)));
-            if (progress < 1) window.requestAnimationFrame(step);
+            if (progress < 1) {
+                animationFrameId = window.requestAnimationFrame(step);
+            }
         };
-        window.requestAnimationFrame(step);
-    }, [value]);
+        animationFrameId = window.requestAnimationFrame(step);
+        return () => window.cancelAnimationFrame(animationFrameId);
+    }, [value, duration]); // Removed displayValue from dep array to avoid restart on re-render
 
     return <span className={className}>{displayValue}</span>;
 });
 
-// --- CONFETTI & PARTICLES ---
-export const Confetti = () => {
+// --- CONFETTI ---
+export const Confetti = memo(() => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         
+        let animationFrameId: number;
         let particles: any[] = [];
         const colors = ['#d4af37', '#f3e5ab', '#e11d48', '#ffffff'];
         
@@ -85,15 +92,18 @@ export const Confetti = () => {
                 ctx.fillStyle = p.color;
                 ctx.fillRect(p.x, p.y, p.size, p.size);
             });
-            requestAnimationFrame(animate);
+            animationFrameId = requestAnimationFrame(animate);
         };
         animate();
-        return () => window.removeEventListener('resize', resize);
+        return () => {
+            window.removeEventListener('resize', resize);
+            cancelAnimationFrame(animationFrameId);
+        };
     }, []);
     return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-[1000]" />;
-};
+});
 
-export const WinParticles: React.FC<{ active: boolean, color: string }> = ({ active, color }) => {
+export const WinParticles: React.FC<{ active: boolean, color: string }> = memo(({ active, color }) => {
     if (!active) return null;
     return (
         <div className="absolute inset-0 pointer-events-none overflow-visible">
@@ -114,27 +124,23 @@ export const WinParticles: React.FC<{ active: boolean, color: string }> = ({ act
             ))}
         </div>
     );
-}
+});
 
 // --- COIN EXPLOSION ---
-export const CoinExplosion: React.FC<{ winner: 'hero' | 'opponent' }> = ({ winner }) => {
-    const particles = Array.from({ length: 24 });
+export const CoinExplosion: React.FC<{ winner: 'hero' | 'opponent' }> = memo(({ winner }) => {
     const isHero = winner === 'hero';
     const targetX = isHero ? 15 : 85; 
     const targetY = isHero ? 85 : 15; 
-
     return (
         <div className="fixed inset-0 pointer-events-none z-[9000] overflow-hidden">
-            {particles.map((_, i) => (
+            {Array.from({ length: 24 }).map((_, i) => (
                 <CoinParticle key={i} targetX={targetX} targetY={targetY} />
             ))}
         </div>
     );
-}
+});
 
-const CoinParticle: React.FC<{ targetX: number, targetY: number }> = ({ targetX, targetY }) => {
-    const startX = 50; 
-    const startY = 50; 
+const CoinParticle: React.FC<{ targetX: number, targetY: number }> = memo(({ targetX, targetY }) => {
     const [windowSize, setWindowSize] = useState({ w: window.innerWidth, h: window.innerHeight });
 
     useEffect(() => {
@@ -145,18 +151,16 @@ const CoinParticle: React.FC<{ targetX: number, targetY: number }> = ({ targetX,
 
     const endXPx = (targetX / 100) * windowSize.w;
     const endYPx = (targetY / 100) * windowSize.h;
-    const startXPx = (startX / 100) * windowSize.w;
-    const startYPx = (startY / 100) * windowSize.h;
+    const startXPx = 0.5 * windowSize.w;
+    const startYPx = 0.5 * windowSize.h;
     const spread = 80;
-    const randomOffsetX = (Math.random() - 0.5) * spread;
-    const randomOffsetY = (Math.random() - 0.5) * spread;
-
+    
     return (
         <motion.div
             initial={{ x: startXPx, y: startYPx, scale: 0, opacity: 1 }}
             animate={{ 
-                x: endXPx + randomOffsetX,
-                y: endYPx + randomOffsetY,
+                x: endXPx + (Math.random() - 0.5) * spread,
+                y: endYPx + (Math.random() - 0.5) * spread,
                 scale: [0, 1.2, 0.8],
                 opacity: [1, 1, 0],
                 rotate: Math.random() * 720
@@ -167,9 +171,9 @@ const CoinParticle: React.FC<{ targetX: number, targetY: number }> = ({ targetX,
             $
         </motion.div>
     );
-}
+});
 
-export const ScreenFX: React.FC<{ type: 'SHAKE' | 'FLASH' | null }> = ({ type }) => {
+export const ScreenFX: React.FC<{ type: 'SHAKE' | 'FLASH' | null }> = memo(({ type }) => {
     if (!type) return null;
     return (
         <div className="fixed inset-0 pointer-events-none z-[9999]">
@@ -190,9 +194,9 @@ export const ScreenFX: React.FC<{ type: 'SHAKE' | 'FLASH' | null }> = ({ type })
              )}
         </div>
     )
-}
+});
 
-export const FloatingFeedback: React.FC<{ text: string, color?: string, onComplete: () => void }> = ({ text, color = '#fbbf24', onComplete }) => {
+export const FloatingFeedback: React.FC<{ text: string, color?: string, onComplete: () => void }> = memo(({ text, color = '#fbbf24', onComplete }) => {
     return (
         <motion.div
             initial={{ y: 20, opacity: 0, scale: 0.5 }}
@@ -206,7 +210,7 @@ export const FloatingFeedback: React.FC<{ text: string, color?: string, onComple
             {text}
         </motion.div>
     );
-};
+});
 
 // --- PLAYER AVATAR ---
 
@@ -218,7 +222,7 @@ export interface PlayerAvatarProps {
     onViewDeclarations?: () => void;
 }
 
-export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, isActive, isDealer, onViewDeclarations }) => {
+export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, position, isActive, isDealer, onViewDeclarations }) => {
     const { playSound } = useSoundManager(true);
     const TOTAL_TIME = 30;
     const [timer, setTimer] = useState(TOTAL_TIME);
@@ -229,48 +233,59 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
     const [showParticles, setShowParticles] = useState(false);
     const lastActionRef = useRef<string | null | undefined>(null);
     
+    // Optimized Timer with RAF to prevent drift and excessive state updates when not needed
     useEffect(() => {
         if (!isActive) { 
             setTimer(TOTAL_TIME); 
             return; 
         }
         
-        const interval = setInterval(() => {
-            setTimer(t => {
-                const next = Math.max(0, t - 0.1);
-                
+        let lastTime = Date.now();
+        let animationFrameId: number;
+
+        const loop = () => {
+            const now = Date.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            setTimer(prev => {
+                const next = Math.max(0, prev - delta);
                 // Audio Tick Logic
-                if (next <= 10 && Math.ceil(next) < Math.ceil(t)) {
+                if (next <= 10 && Math.ceil(next) < Math.ceil(prev)) {
                      const isUrgent = next <= 5;
-                     // Pitch shift up as time runs out
                      const rate = isUrgent ? 1.0 + (5 - next) * 0.1 : 1.0; 
                      playSound('tick', { rate, volume: isUrgent ? 0.6 : 0.3 });
                 }
                 return next;
             });
-        }, 100);
-        return () => clearInterval(interval);
-    }, [isActive, playSound]);
+
+            if (timer > 0) {
+                animationFrameId = requestAnimationFrame(loop);
+            }
+        };
+
+        animationFrameId = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [isActive, playSound]); // Removed timer from dep array
 
     useEffect(() => {
-        if (player.roundScore > lastScore) {
+        if (player.roundScore !== lastScore) {
             const diff = player.roundScore - lastScore;
-            setScoreFeedback(`+${diff}`);
-            setShowParticles(true);
-            const t = setTimeout(() => setShowParticles(false), 1000);
+            if (diff > 0) {
+                setScoreFeedback(`+${diff}`);
+                setShowParticles(true);
+                const t = setTimeout(() => setShowParticles(false), 1000);
+                setLastScore(player.roundScore);
+                return () => clearTimeout(t);
+            }
             setLastScore(player.roundScore);
-            return () => clearTimeout(t);
-        } else if (player.roundScore < lastScore) {
-             setLastScore(player.roundScore);
         }
-    }, [player.roundScore]);
+    }, [player.roundScore, lastScore]);
 
     useEffect(() => {
         if (player.lastAction && player.lastAction !== lastActionRef.current) {
             const txt = player.lastAction;
             setActionText(txt);
-
-            // Determine variant based on content
             const lower = txt.toLowerCase();
             let variant: BubbleVariant = 'standard';
             if (lower.includes('belote') || lower.includes('rebelote')) variant = 'gold';
@@ -279,35 +294,27 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
             else if (lower.includes('pass')) variant = 'gray';
             
             setActionVariant(variant);
-
-            // Hide after duration
-            const duration = 2500;
-            const t = setTimeout(() => setActionText(null), duration);
+            const t = setTimeout(() => setActionText(null), 2500);
+            lastActionRef.current = player.lastAction;
             return () => clearTimeout(t);
         }
-        lastActionRef.current = player.lastAction;
     }, [player.lastAction]);
 
     const isHero = position === 'bottom';
     const isRight = !isHero; 
     const hasDeclarations = player.declaredCombinations && player.declaredCombinations.some(c => c.type !== 'BELOTE');
     const isUrgent = timer < 10;
-    
     const radius = 42;
     const strokeWidth = 5;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (timer / TOTAL_TIME) * circumference;
-    
-    // Bubble Position Logic: Hero (Bottom Left) -> Top Right, Opponent (Top Right) -> Bottom Left
     const bubblePos: BubblePosition = isHero ? 'top-right' : 'bottom-left';
 
     return (
         <motion.div 
             className={`
                 absolute z-[${Z_INDEX.PLAYER_AVATARS}] transition-all duration-300 scale-75 md:scale-100
-                ${isHero 
-                    ? 'bottom-24 left-2 md:bottom-20 md:left-8 origin-left' 
-                    : 'top-20 right-2 md:top-24 md:right-8 origin-right'}
+                ${isHero ? 'bottom-24 left-2 md:bottom-20 md:left-8 origin-left' : 'top-20 right-2 md:top-24 md:right-8 origin-right'}
             `}
             initial={{ x: isHero ? -100 : 100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -315,75 +322,34 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
         >
             <div className="relative flex items-center justify-center">
                 <WinParticles active={showParticles} color={isHero ? '#34d399' : '#f43f5e'} />
-                
-                {/* Score Feedback (Floating Numbers) */}
                 <AnimatePresence>
-                    {scoreFeedback && (
-                        <FloatingFeedback 
-                            text={scoreFeedback} 
-                            color={isHero ? '#34d399' : '#f43f5e'} 
-                            onComplete={() => setScoreFeedback(null)} 
-                        />
-                    )}
+                    {scoreFeedback && <FloatingFeedback text={scoreFeedback} color={isHero ? '#34d399' : '#f43f5e'} onComplete={() => setScoreFeedback(null)} />}
                 </AnimatePresence>
-
-                {/* Game Action Bubble (Text) */}
-                <ActionBubble 
-                    text={actionText || ''} 
-                    isVisible={!!actionText} 
-                    variant={actionVariant} 
-                    position={bubblePos} 
-                />
+                <ActionBubble text={actionText || ''} isVisible={!!actionText} variant={actionVariant} position={bubblePos} />
 
                 <div className="relative w-28 h-28 flex items-center justify-center">
-                    {isActive && isUrgent && (
-                        <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl animate-pulse" />
-                    )}
-
+                    {isActive && isUrgent && <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl animate-pulse" />}
                     <svg className="w-full h-full -rotate-90 drop-shadow-2xl overflow-visible">
                         <defs>
-                            <linearGradient id="heroTimer" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stopColor="#22d3ee" />
-                                <stop offset="100%" stopColor="#3b82f6" />
-                            </linearGradient>
-                            <linearGradient id="oppTimer" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stopColor="#fbbf24" />
-                                <stop offset="100%" stopColor="#f43f5e" />
-                            </linearGradient>
-                            <linearGradient id="urgentTimer" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#ef4444" />
-                                <stop offset="100%" stopColor="#b91c1c" />
-                            </linearGradient>
+                            <linearGradient id="heroTimer" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#22d3ee" /><stop offset="100%" stopColor="#3b82f6" /></linearGradient>
+                            <linearGradient id="oppTimer" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#fbbf24" /><stop offset="100%" stopColor="#f43f5e" /></linearGradient>
+                            <linearGradient id="urgentTimer" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#ef4444" /><stop offset="100%" stopColor="#b91c1c" /></linearGradient>
                         </defs>
                         <circle cx="50%" cy="50%" r={radius} fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={strokeWidth} />
                         {isActive && (
                             <motion.circle 
-                                cx="50%" cy="50%" r={radius} 
-                                fill="none" 
+                                cx="50%" cy="50%" r={radius} fill="none" 
                                 stroke={isUrgent ? 'url(#urgentTimer)' : (isHero ? 'url(#heroTimer)' : 'url(#oppTimer)')}
-                                strokeWidth={strokeWidth}
-                                strokeDasharray={circumference}
-                                initial={{ strokeDashoffset: circumference }}
-                                animate={{ strokeDashoffset: offset }}
-                                strokeLinecap="round"
-                                style={{ filter: isUrgent ? 'drop-shadow(0 0 6px #ef4444)' : (isHero ? 'drop-shadow(0 0 4px #22d3ee)' : 'drop-shadow(0 0 4px #fbbf24)') }}
+                                strokeWidth={strokeWidth} strokeDasharray={circumference}
+                                initial={{ strokeDashoffset: circumference }} animate={{ strokeDashoffset: offset }}
+                                strokeLinecap="round" style={{ filter: isUrgent ? 'drop-shadow(0 0 6px #ef4444)' : (isHero ? 'drop-shadow(0 0 4px #22d3ee)' : 'drop-shadow(0 0 4px #fbbf24)') }}
                             />
                         )}
                     </svg>
 
                     <AnimatePresence>
                         {isActive && (
-                            <motion.div 
-                                initial={{ scale: 0 }} 
-                                animate={{ scale: 1 }} 
-                                exit={{ scale: 0 }}
-                                className={`
-                                    absolute -bottom-2 font-mono font-bold text-xs px-2 py-0.5 rounded-full border shadow-lg z-20
-                                    ${isUrgent 
-                                        ? 'bg-red-600 border-red-400 text-white animate-pulse' 
-                                        : 'bg-slate-900 border-slate-700 text-slate-300'}
-                                `}
-                            >
+                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className={`absolute -bottom-2 font-mono font-bold text-xs px-2 py-0.5 rounded-full border shadow-lg z-20 ${isUrgent ? 'bg-red-600 border-red-400 text-white animate-pulse' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
                                 {Math.ceil(timer)}s
                             </motion.div>
                         )}
@@ -391,17 +357,13 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
 
                     <div className="absolute inset-3 rounded-full overflow-hidden border-4 border-slate-800 bg-slate-900 shadow-inner flex items-center justify-center">
                          <div className={`absolute inset-0 bg-gradient-to-br ${isHero ? 'from-blue-600 to-indigo-900' : 'from-rose-600 to-red-900'} opacity-80`} />
-                         <span className="relative text-3xl font-black text-white/90 drop-shadow-md z-10">
-                            {isHero ? '😎' : '🤖'}
-                         </span>
+                         <span className="relative text-3xl font-black text-white/90 drop-shadow-md z-10">{isHero ? '😎' : '🤖'}</span>
                          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
                     </div>
 
                     {hasDeclarations && (
                         <motion.button 
-                            initial={{ scale: 0 }} animate={{ scale: 1 }}
-                            whileHover={{ scale: 1.1 }}
-                            onClick={onViewDeclarations}
+                            initial={{ scale: 0 }} animate={{ scale: 1 }} whileHover={{ scale: 1.1 }} onClick={onViewDeclarations}
                             className={`absolute -top-1 ${isRight ? '-left-1' : '-right-1'} w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center z-30 cursor-pointer hover:shadow-indigo-500/50`}
                         >
                             <span className="text-base">🎴</span>
@@ -433,9 +395,9 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ player, position, is
             </div>
         </motion.div>
     );
-};
+});
 
-export const ScoreBoard: React.FC<{ heroScore: number; oppScore: number; target: number; round: number }> = ({ heroScore, oppScore, target, round }) => {
+export const ScoreBoard: React.FC<{ heroScore: number; oppScore: number; target: number; round: number }> = memo(({ heroScore, oppScore, target, round }) => {
     return (
         <div className={`absolute top-4 left-4 md:left-8 z-[${Z_INDEX.SCOREBOARD}] hidden md:flex flex-col gap-2`}>
              <div className="glass-panel p-4 rounded-2xl border border-white/10 shadow-xl min-w-[200px]">
@@ -460,9 +422,9 @@ export const ScoreBoard: React.FC<{ heroScore: number; oppScore: number; target:
              </div>
         </div>
     );
-};
+});
 
-export const MobileScorePill: React.FC<{ round: number; target: number }> = ({ round, target }) => {
+export const MobileScorePill: React.FC<{ round: number; target: number }> = memo(({ round, target }) => {
     return (
         <div className="glass-panel px-4 py-1.5 rounded-full border border-white/10 shadow-lg flex items-center gap-3">
             <span className="text-[10px] font-bold text-slate-400 uppercase">RD {round}</span>
@@ -470,7 +432,7 @@ export const MobileScorePill: React.FC<{ round: number; target: number }> = ({ r
             <span className="text-[10px] font-bold text-gold uppercase">Target {target}</span>
         </div>
     );
-};
+});
 
 interface SheetProps {
     isOpen: boolean;
@@ -502,11 +464,16 @@ const Sheet: React.FC<SheetProps> = ({ isOpen, onClose, children, direction = 'b
     );
 };
 
-export const SettingsModal: React.FC<{ settings: GameSettings; onUpdate: (s: GameSettings) => void; onClose: () => void }> = ({ settings, onUpdate, onClose }) => {
-    const toggle = (key: keyof GameSettings) => { if (typeof settings[key] === 'boolean') { onUpdate({ ...settings, [key]: !settings[key] }); } };
-    const setDifficulty = (d: GameSettings['difficulty']) => onUpdate({ ...settings, difficulty: d });
-    const setSpeed = (s: GameSettings['gameSpeed']) => onUpdate({ ...settings, gameSpeed: s });
-    const setTarget = (t: number) => onUpdate({ ...settings, targetScore: t });
+export const SettingsModal: React.FC<{ 
+    settings: GameSettings; 
+    onUpdate: (s: GameSettings) => void; 
+    onClose: () => void;
+    onReplayTutorial?: () => void;
+}> = memo(({ settings, onUpdate, onClose, onReplayTutorial }) => {
+    const toggle = useCallback((key: keyof GameSettings) => { if (typeof settings[key] === 'boolean') { onUpdate({ ...settings, [key]: !settings[key] }); } }, [settings, onUpdate]);
+    const setDifficulty = useCallback((d: GameSettings['difficulty']) => onUpdate({ ...settings, difficulty: d }), [settings, onUpdate]);
+    const setSpeed = useCallback((s: GameSettings['gameSpeed']) => onUpdate({ ...settings, gameSpeed: s }), [settings, onUpdate]);
+    const setTarget = useCallback((t: number) => onUpdate({ ...settings, targetScore: t }), [settings, onUpdate]);
 
     return (
         <Sheet isOpen={true} onClose={onClose} direction="top">
@@ -527,13 +494,20 @@ export const SettingsModal: React.FC<{ settings: GameSettings; onUpdate: (s: Gam
                          <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl"><span className="text-sm font-medium text-slate-300">Sound Effects</span><button onClick={() => toggle('soundEnabled')} className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.soundEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-0'}`} /></button></div>
                          <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl"><span className="text-sm font-medium text-slate-300">Haptics</span><button onClick={() => toggle('hapticsEnabled')} className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.hapticsEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${settings.hapticsEnabled ? 'translate-x-6' : 'translate-x-0'}`} /></button></div>
                      </div>
+                     {onReplayTutorial && (
+                        <div className="mt-6 pt-6 border-t border-white/5">
+                            <button onClick={() => { onClose(); onReplayTutorial(); }} className="w-full py-3 bg-white/5 hover:bg-white/10 text-slate-300 font-bold uppercase text-xs tracking-widest rounded-xl transition-colors flex items-center justify-center gap-2">
+                                <span className="text-lg">🎓</span> Replay Tutorial
+                            </button>
+                        </div>
+                     )}
                  </div>
              </div>
         </Sheet>
     );
-};
+});
 
-export const HistoryPanel: React.FC<{ isOpen: boolean; onClose: () => void; history: RoundResult[] }> = ({ isOpen, onClose, history }) => {
+export const HistoryPanel: React.FC<{ isOpen: boolean; onClose: () => void; history: RoundResult[] }> = memo(({ isOpen, onClose, history }) => {
     return (
         <Sheet isOpen={isOpen} onClose={onClose} direction="bottom">
             <div className="p-4 bg-slate-950 flex justify-between items-center sticky top-0 z-10 border-b border-white/10"><h2 className="text-lg font-bold text-white flex items-center gap-2"><Icons.History /> Round History</h2><button onClick={onClose} className="text-slate-400 hover:text-white"><Icons.Close /></button></div>
@@ -547,11 +521,7 @@ export const HistoryPanel: React.FC<{ isOpen: boolean; onClose: () => void; hist
                                 <span className="text-[10px] text-slate-500 uppercase">Contract</span>
                                 <div className="flex items-center gap-1.5 bg-black/30 px-2 py-1 rounded">
                                     <span className={`text-xs font-bold ${round.bidTaker === 'hero' ? 'text-emerald-400' : 'text-rose-400'}`}>{round.bidTaker === 'hero' ? 'You' : 'Opp'}</span>
-                                    {round.trump && (
-                                        <span className={`text-sm ${(round.trump === 'H' || round.trump === 'D') ? 'text-red-400' : 'text-slate-200'}`}>
-                                            {SUIT_SYMBOLS[round.trump]}
-                                        </span>
-                                    )}
+                                    {round.trump && <span className={`text-sm ${(round.trump === 'H' || round.trump === 'D') ? 'text-red-400' : 'text-slate-200'}`}>{SUIT_SYMBOLS[round.trump]}</span>}
                                 </div>
                             </div>
                         </div>
@@ -560,9 +530,9 @@ export const HistoryPanel: React.FC<{ isOpen: boolean; onClose: () => void; hist
             </div>
         </Sheet>
     );
-};
+});
 
-export const ChatSheet: React.FC<{ isOpen: boolean; onClose: () => void; onEmote: (emoji: string) => void }> = ({ isOpen, onClose, onEmote }) => {
+export const ChatSheet: React.FC<{ isOpen: boolean; onClose: () => void; onEmote: (emoji: string) => void }> = memo(({ isOpen, onClose, onEmote }) => {
     const emojis = ["👍", "👎", "😂", "😡", "😎", "🤔", "😱", "👋", "🎉", "🔥", "💔", "🍀"];
     return (
         <Sheet isOpen={isOpen} onClose={onClose} direction="bottom">
@@ -574,4 +544,4 @@ export const ChatSheet: React.FC<{ isOpen: boolean; onClose: () => void; onEmote
             </div>
         </Sheet>
     );
-};
+});

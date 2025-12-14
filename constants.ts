@@ -9,43 +9,74 @@ export const RANKS: Rank[] = ['9', '10', 'J', 'Q', 'K', 'A'];
 // Used for sorting hand to find Tierce/Fifty/Hundred
 export const COMBO_RANK_ORDER: Rank[] = ['9', '10', 'J', 'Q', 'K', 'A'];
 
-// Raw points map (Rank -> [Non-Trump Value, Trump Value])
-// Total Card Points = 152
-export const CARD_VALUES: Record<Rank, { nonTrump: number; trump: number }> = {
-  '9': { nonTrump: 0, trump: 14 },
-  'J': { nonTrump: 2, trump: 20 },
-  'Q': { nonTrump: 3, trump: 3 },
-  'K': { nonTrump: 4, trump: 4 },
-  '10': { nonTrump: 10, trump: 10 },
-  'A': { nonTrump: 11, trump: 11 },
+// --- STRICT VBET RULESET SCORING ---
+
+export const TOTAL_POINTS_REFERENCE = 162; // 152 (Cards) + 10 (Last Trick)
+
+// 1. CARD VALUES (Raw Points)
+export const POINT_VALUES = {
+  TRUMP: {
+    'J': 20,
+    '9': 14,
+    'A': 11,
+    '10': 10,
+    'K': 4,
+    'Q': 3
+  },
+  NON_TRUMP: {
+    'A': 11,
+    '10': 10,
+    'K': 4,
+    'Q': 3,
+    'J': 2,
+    '9': 0
+  },
+  NO_TRUMP_MODE: {
+    'A': 19,
+    '10': 10,
+    'K': 4,
+    'Q': 3,
+    'J': 2,
+    '9': 0
+  }
 };
 
-// Mode B: No Trump Values
-// Total Card Points = 152 (19+10+4+3+2+0 = 38 * 4 = 152)
-export const CARD_VALUES_NO_TRUMP: Record<Rank, number> = {
-  'A': 19, 
-  '10': 10,
-  'K': 4,
-  'Q': 3,
-  'J': 2,
-  '9': 0
+// 2. DECLARATION VALUES
+export const DECLARATION_VALUES = {
+  SEQUENCES: {
+    TIERCE: 20,
+    FIFTY: 50,
+    HUNDRED: 100
+  },
+  BELOTE: 20,
+  CARRE: {
+    TRUMP: {
+      'J': 200,
+      '9': 140,
+      'A': 110,
+      'OTHER': 100 // K, Q, 10
+    },
+    NO_TRUMP: {
+      'A': 190,
+      '9': 0,
+      'OTHER': 100 // 10, K, Q, J
+    }
+  }
 };
 
 // Hierarchy for comparison (Higher index = stronger)
-// Non-Trump: 7, 8, 9, J, Q, K, 10, A (24-card: 9, J, Q, K, 10, A)
+// Non-Trump: 9, J, Q, K, 10, A
 export const ORDER_NON_TRUMP: Rank[] = ['9', 'J', 'Q', 'K', '10', 'A'];
 
-// Trump: 7, 8, Q, K, 10, A, 9, J (24-card: Q, K, 10, A, 9, J)
+// Trump: Q, K, 10, A, 9, J (Power Order: Lowest to Highest)
 export const ORDER_TRUMP: Rank[] = ['Q', 'K', '10', 'A', '9', 'J'];
 
 // No Trump Hierarchy: A > 10 > K > Q > J > 9
+// Same as Non-Trump basically, but we define explicitly for clarity
 export const ORDER_NO_TRUMP_MODE: Rank[] = ['9', 'J', 'Q', 'K', '10', 'A']; 
 
 // Visual order for sorting hand: 9, 10, J, Q, K, A
 export const VISUAL_SORT_ORDER: Rank[] = ['9', '10', 'J', 'Q', 'K', 'A'];
-
-// Visual order for sorting/sequences (A-K-Q-J-10-9) - Deprecated for hand sort, kept if needed for other logic
-export const ORDER_VISUAL: Rank[] = ['A', 'K', 'Q', 'J', '10', '9'];
 
 export const SUIT_SYMBOLS: Record<Suit, string> = {
   H: '♥',
@@ -69,18 +100,15 @@ export const SUIT_NAMES: Record<Suit, string> = {
   S: 'Spades',
 };
 
-export const COMBINATION_SCORES = {
-  BELOTE: 20,
-  TIERCE: 20,
-  FIFTY: 50,
-  HUNDRED: 100,
-  // Trump Mode Carre
-  CARRE_J: 200,
-  CARRE_9: 140, 
-  CARRE_A: 110, 
-  CARRE_OTHERS: 100,
-  // No Trump Mode Carre
-  CARRE_NT_A: 190,
-  CARRE_NT_9: 0,
-  CARRE_NT_OTHERS: 100
+// Deprecated accessors maintained for backward compatibility with UI components if needed
+// but Logic Engine uses POINT_VALUES and DECLARATION_VALUES directly.
+export const CARD_VALUES: Record<Rank, { nonTrump: number; trump: number }> = {
+  '9': { nonTrump: 0, trump: 14 },
+  'J': { nonTrump: 2, trump: 20 },
+  'Q': { nonTrump: 3, trump: 3 },
+  'K': { nonTrump: 4, trump: 4 },
+  '10': { nonTrump: 10, trump: 10 },
+  'A': { nonTrump: 11, trump: 11 },
 };
+
+export const CARD_VALUES_NO_TRUMP: Record<Rank, number> = POINT_VALUES.NO_TRUMP_MODE;

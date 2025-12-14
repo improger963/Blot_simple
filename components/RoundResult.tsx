@@ -23,7 +23,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
     const isCapot = roundInfo.status === 'CAPOT';
     const isDedans = roundInfo.status === 'DEDANS';
     
-    // Calculate previous scores to animate the bar from
+    // Calculate previous table scores to animate the bar from
     const prevHeroScore = Math.max(0, currentScores.hero - hero.finalPoints);
     const prevOppScore = Math.max(0, currentScores.opponent - opponent.finalPoints);
 
@@ -75,7 +75,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                                     {isCapot ? 'CAPOT !' : 'DEDANS !'}
                                 </span>
                                 <span className="text-xs font-bold text-black/80 bg-white/20 px-2 py-0.5 rounded">
-                                    {isCapot ? '+21 Points' : 'All Points Lost'}
+                                    {isCapot ? '+21 Table Pts' : 'All Points Lost'}
                                 </span>
                             </motion.div>
                         )}
@@ -119,8 +119,11 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                             </div>
                             <div>
                                 <h3 className="text-emerald-400 font-bold text-lg uppercase tracking-wider">You</h3>
-                                <div className="text-4xl font-black font-mono text-white leading-none">
-                                    +<CountUp value={hero.finalPoints} />
+                                <div className="flex flex-col">
+                                    <div className="text-4xl font-black font-mono text-white leading-none">
+                                        +<CountUp value={hero.finalPoints} />
+                                    </div>
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Table Points</span>
                                 </div>
                             </div>
                         </div>
@@ -152,9 +155,14 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                             {isCapot && roundInfo.winnerId === 'hero' && (
                                 <div className="flex justify-between text-gold font-bold">
                                     <span>Capot Bonus</span>
-                                    <span>+90</span>
+                                    <span>+50</span>
                                 </div>
                             )}
+                            {/* Raw Total for transparency */}
+                            <div className="border-t border-white/5 pt-2 flex justify-between text-[10px] opacity-70">
+                                <span>Total Raw Score</span>
+                                <span>{hero.rawFinalPoints}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -163,8 +171,11 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                         <div className="flex flex-row-reverse md:flex-row items-center gap-4 border-b border-white/5 pb-4 justify-between md:justify-end">
                             <div className="text-right">
                                 <h3 className="text-rose-400 font-bold text-lg uppercase tracking-wider">Opponent</h3>
-                                <div className="text-4xl font-black font-mono text-white leading-none">
-                                    +<CountUp value={opponent.finalPoints} />
+                                <div className="flex flex-col items-end">
+                                    <div className="text-4xl font-black font-mono text-white leading-none">
+                                        +<CountUp value={opponent.finalPoints} />
+                                    </div>
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Table Points</span>
                                 </div>
                             </div>
                             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-rose-600 to-red-900 flex items-center justify-center text-2xl shadow-lg border-2 border-white/10">
@@ -199,9 +210,14 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                             {isCapot && roundInfo.winnerId === 'opponent' && (
                                 <div className="flex justify-between md:flex-row-reverse text-gold font-bold">
                                     <span>Capot Bonus</span>
-                                    <span>+90</span>
+                                    <span>+50</span>
                                 </div>
                             )}
+                            {/* Raw Total for transparency */}
+                            <div className="border-t border-white/5 pt-2 flex justify-between md:flex-row-reverse text-[10px] opacity-70">
+                                <span>Total Raw Score</span>
+                                <span>{opponent.rawFinalPoints}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -209,7 +225,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                 {/* --- TOTAL PROGRESS BAR --- */}
                 <div className="bg-black/40 p-6 border-t border-white/10">
                     <div className="flex justify-between items-end mb-2">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Game Progress</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Game Match Progress</span>
                         <span className="text-xs font-mono text-slate-500">Goal: <span className="text-gold font-bold">{target}</span></span>
                     </div>
 
@@ -250,7 +266,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                             {/* New Score Fill */}
                             <motion.div 
                                 className="h-full bg-gradient-to-r from-rose-600 to-rose-400 relative z-10"
-                                initial={{ width: `${Math.min((currentScores.opponent / target) * 100, 100)}%` }}
+                                initial={{ width: `${Math.min((prevOppScore / target) * 100, 100)}%` }}
                                 animate={{ width: `${Math.min((currentScores.opponent / target) * 100, 100)}%` }}
                                 transition={{ duration: 1.5, ease: 'circOut', delay: 0.2 }}
                             />

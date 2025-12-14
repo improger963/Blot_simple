@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Z_INDEX } from '../utils/uiLogic';
@@ -58,7 +59,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ onClose, initialTab = 'b
                                 <ul className="list-disc pl-5 mt-2 space-y-1 marker:text-gold">
                                     <li><strong className="text-white">Normal Win:</strong> You score your points, opponent scores theirs.</li>
                                     <li><strong className="text-amber-400">Dedans (Fail):</strong> If you score less than the opponent, you get 0 points (except Belote). Opponent gets ALL points (162 + Declarations).</li>
-                                    <li><strong className="text-gold">Capot (Perfect):</strong> Winning all 9 tricks. Bonus <strong className="text-gold">+90 points</strong>.</li>
+                                    <li><strong className="text-gold">Capot (Perfect):</strong> Winning all 9 tricks. Bonus <strong className="text-gold">+50 points</strong>.</li>
                                 </ul>
                             </section>
 

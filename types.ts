@@ -1,4 +1,5 @@
 
+
 export type Suit = 'H' | 'D' | 'C' | 'S'; // Hearts, Diamonds, Clubs, Spades
 export type Rank = '9' | '10' | 'J' | 'Q' | 'K' | 'A';
 
@@ -48,6 +49,7 @@ export interface ScoreBreakdown {
   beloteBonus: number; // 0 or 20
   
   finalPoints: number; // The actual points added to score
+  rawFinalPoints: number; // Store RAW points for display/debug
   
   capturedCardsCount: number; // For tooltip
   declaredCombos: Combination[]; // For tooltip
