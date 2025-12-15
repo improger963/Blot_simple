@@ -1,5 +1,6 @@
 
 
+
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Card, GameState, Player, Suit, Combination, GamePhase, NotificationType, GameSettings, ContractType } from './types';
 import { Table } from './components/Table';
@@ -25,7 +26,23 @@ const INITIAL_OPPONENT_STATE: Player = {
 };
 
 const DEFAULT_SETTINGS: GameSettings = {
-    gameSpeed: 'normal', soundEnabled: true, hapticsEnabled: true, highContrast: false, cardSize: 'normal', animationsEnabled: true, difficulty: 'intermediate', targetScore: 51, tieResolution: 'litige'
+    gameSpeed: 'normal', 
+    soundEnabled: true, 
+    hapticsEnabled: true, 
+    highContrast: false, 
+    cardSize: 'normal', 
+    animationsEnabled: true, 
+    difficulty: 'intermediate', 
+    targetScore: 51, 
+    tieResolution: 'litige',
+    enableNoTrump: true,
+    enabledCombinations: {
+        TIERCE: true,
+        FIFTY: true,
+        HUNDRED: true,
+        CARRE: true,
+        BELOTE: true
+    }
 };
 
 const App: React.FC = () => {
@@ -313,7 +330,8 @@ const App: React.FC = () => {
             heroHand: prev.players.hero.hand,
             oppHand: prev.players.opponent.hand,
             trumpSuit: isNoTrump ? null : suit,
-            contractType
+            contractType,
+            enabledCombinations: settings.enabledCombinations // Pass settings to logic
         });
         
         const msg = `${takerId === 'hero' ? 'You' : 'Opponent'} took ${isNoTrump ? 'NO TRUMP' : suit}`;
@@ -336,7 +354,7 @@ const App: React.FC = () => {
             a11yAnnouncement: msg
         };
     });
-  }, [addNotification, playSound]);
+  }, [addNotification, playSound, settings.enabledCombinations]);
 
   const handlePass = useCallback(() => {
     setGameState(prev => {
@@ -419,7 +437,11 @@ const App: React.FC = () => {
   // --- BOT WORKER INTEGRATION ---
   useBotAgent({
     gameState,
-    settings: { difficulty: settings.difficulty, gameSpeed: settings.gameSpeed },
+    settings: { 
+        difficulty: settings.difficulty, 
+        gameSpeed: settings.gameSpeed,
+        enableNoTrump: settings.enableNoTrump
+    },
     onTake: handleTake,
     onPass: handlePass,
     onPlayCard: handlePlayCard,
@@ -484,7 +506,7 @@ const App: React.FC = () => {
                 />
 
                 {gameState.phase === 'BIDDING' && gameState.candidateCard && (
-                    <BiddingControls candidateCard={gameState.candidateCard} onTake={handleTake} onPass={handlePass} bidRound={gameState.bidRound} mustPick={mustPick} soundEnabled={settings.soundEnabled} />
+                    <BiddingControls candidateCard={gameState.candidateCard} onTake={handleTake} onPass={handlePass} bidRound={gameState.bidRound} mustPick={mustPick} soundEnabled={settings.soundEnabled} enableNoTrump={settings.enableNoTrump} />
                 )}
 
                 {gameState.lastRoundBreakdown && gameState.phase === 'SCORING' && (

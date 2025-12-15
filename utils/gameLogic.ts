@@ -1,6 +1,7 @@
 
 
-import { Card, Combination, Rank, Suit, TrickCard, Difficulty, ContractType } from '../types';
+
+import { Card, Combination, Rank, Suit, TrickCard, Difficulty, ContractType, EnabledCombinations } from '../types';
 import { 
     POINT_VALUES, 
     DECLARATION_VALUES, 
@@ -51,6 +52,7 @@ interface DistributionParams {
     oppHand: Card[];
     trumpSuit: Suit | null;
     contractType: ContractType;
+    enabledCombinations: EnabledCombinations;
 }
 
 export const distributeCardsLogic = ({
@@ -61,7 +63,8 @@ export const distributeCardsLogic = ({
     heroHand,
     oppHand,
     trumpSuit,
-    contractType
+    contractType,
+    enabledCombinations
 }: DistributionParams) => {
     const newHeroHand = [...heroHand];
     const newOpponentHand = [...oppHand];
@@ -109,8 +112,8 @@ export const distributeCardsLogic = ({
     return { 
         heroHand: sortedHero, 
         opponentHand: sortedOpp, 
-        heroCombos: calculateCombinations(sortedHero, trumpSuit, contractType), 
-        oppCombos: calculateCombinations(sortedOpp, trumpSuit, contractType) 
+        heroCombos: calculateCombinations(sortedHero, trumpSuit, contractType, enabledCombinations), 
+        oppCombos: calculateCombinations(sortedOpp, trumpSuit, contractType, enabledCombinations) 
     };
 };
 
@@ -262,76 +265,94 @@ export const canPlayCard = (
 
 // --- Combinations Finder ---
 
-export const calculateCombinations = (hand: Card[], trumpSuit: Suit | null, contractType: ContractType = 'TRUMP'): Combination[] => {
+export const calculateCombinations = (
+    hand: Card[], 
+    trumpSuit: Suit | null, 
+    contractType: ContractType = 'TRUMP',
+    enabledCombinations: EnabledCombinations = { TIERCE: true, FIFTY: true, HUNDRED: true, CARRE: true, BELOTE: true }
+): Combination[] => {
     const rawCombos: Combination[] = [];
     const effectiveTrump = contractType === 'TRUMP' ? trumpSuit : null;
 
     // 1. CARRE (4 of a kind)
-    // Optimization: Group by rank first to avoid multiple filters
-    const rankGroups: Record<string, Card[]> = {};
-    hand.forEach(c => {
-        if (!rankGroups[c.rank]) rankGroups[c.rank] = [];
-        rankGroups[c.rank].push(c);
-    });
+    if (enabledCombinations.CARRE) {
+        // Optimization: Group by rank first to avoid multiple filters
+        const rankGroups: Record<string, Card[]> = {};
+        hand.forEach(c => {
+            if (!rankGroups[c.rank]) rankGroups[c.rank] = [];
+            rankGroups[c.rank].push(c);
+        });
 
-    ['J', '9', 'A', '10', 'K', 'Q'].forEach(rank => {
-        const cards = rankGroups[rank];
-        if (cards && cards.length === 4) {
-            const points = calculateDeclarationPoints('CARRE', rank as Rank, contractType);
-            if (points > 0) {
-                rawCombos.push({
-                    id: `carre-${rank}`,
-                    type: 'CARRE',
-                    cards: cards,
-                    score: points,
-                    heightValue: COMBO_RANK_ORDER.indexOf(rank as Rank), 
-                    rank: rank as Rank,
-                    isTrump: false 
-                });
+        ['J', '9', 'A', '10', 'K', 'Q'].forEach(rank => {
+            const cards = rankGroups[rank];
+            if (cards && cards.length === 4) {
+                const points = calculateDeclarationPoints('CARRE', rank as Rank, contractType);
+                if (points > 0) {
+                    rawCombos.push({
+                        id: `carre-${rank}`,
+                        type: 'CARRE',
+                        cards: cards,
+                        score: points,
+                        heightValue: COMBO_RANK_ORDER.indexOf(rank as Rank), 
+                        rank: rank as Rank,
+                        isTrump: false 
+                    });
+                }
             }
-        }
-    });
+        });
+    }
 
     // 2. SEQUENCES
-    SUITS.forEach(suit => {
-        // Filter and sort for sequence detection
-        const suitCards = hand
-            .filter(c => c.suit === suit)
-            .sort((a, b) => COMBO_RANK_ORDER.indexOf(b.rank) - COMBO_RANK_ORDER.indexOf(a.rank));
-        
-        if (suitCards.length < 3) return; // Optimization: Skip if not enough cards
+    const checkTierce = enabledCombinations.TIERCE;
+    const checkFifty = enabledCombinations.FIFTY;
+    const checkHundred = enabledCombinations.HUNDRED;
 
-        const usedInSeq = new Set<string>();
-
-        // Check for lengths 5 down to 3
-        for (let len = 5; len >= 3; len--) {
-            const seqs = findSequences(suitCards, len);
+    if (checkTierce || checkFifty || checkHundred) {
+        SUITS.forEach(suit => {
+            // Filter and sort for sequence detection
+            const suitCards = hand
+                .filter(c => c.suit === suit)
+                .sort((a, b) => COMBO_RANK_ORDER.indexOf(b.rank) - COMBO_RANK_ORDER.indexOf(a.rank));
             
-            seqs.forEach(seq => {
-                if (!seq.some(c => usedInSeq.has(c.id))) {
-                    const topCard = seq[0];
-                    let type: Combination['type'] = 'TIERCE';
-                    if (len === 4) type = 'FIFTY';
-                    if (len >= 5) type = 'HUNDRED';
-                    
-                    rawCombos.push({
-                        id: `seq-${suit}-${topCard.rank}-${len}`,
-                        type,
-                        cards: seq,
-                        score: calculateDeclarationPoints(type, topCard.rank, contractType),
-                        heightValue: COMBO_RANK_ORDER.indexOf(topCard.rank),
-                        rank: topCard.rank,
-                        isTrump: suit === effectiveTrump
-                    });
+            if (suitCards.length < 3) return; // Optimization: Skip if not enough cards
 
-                    seq.forEach(c => usedInSeq.add(c.id));
-                }
-            });
-        }
-    });
+            const usedInSeq = new Set<string>();
+
+            // Check for lengths 5 down to 3
+            for (let len = 5; len >= 3; len--) {
+                // Skip length checks based on settings
+                if (len === 5 && !checkHundred) continue;
+                if (len === 4 && !checkFifty) continue;
+                if (len === 3 && !checkTierce) continue;
+
+                const seqs = findSequences(suitCards, len);
+                
+                seqs.forEach(seq => {
+                    if (!seq.some(c => usedInSeq.has(c.id))) {
+                        const topCard = seq[0];
+                        let type: Combination['type'] = 'TIERCE';
+                        if (len === 4) type = 'FIFTY';
+                        if (len >= 5) type = 'HUNDRED';
+                        
+                        rawCombos.push({
+                            id: `seq-${suit}-${topCard.rank}-${len}`,
+                            type,
+                            cards: seq,
+                            score: calculateDeclarationPoints(type, topCard.rank, contractType),
+                            heightValue: COMBO_RANK_ORDER.indexOf(topCard.rank),
+                            rank: topCard.rank,
+                            isTrump: suit === effectiveTrump
+                        });
+
+                        seq.forEach(c => usedInSeq.add(c.id));
+                    }
+                });
+            }
+        });
+    }
 
     // 3. BELOTE (King + Queen of Trump)
-    if (contractType === 'TRUMP' && trumpSuit) {
+    if (enabledCombinations.BELOTE && contractType === 'TRUMP' && trumpSuit) {
         const trumpCards = hand.filter(c => c.suit === trumpSuit);
         const kTrump = trumpCards.find(c => c.rank === 'K');
         const qTrump = trumpCards.find(c => c.rank === 'Q');
@@ -583,7 +604,8 @@ export const getBotBidDecision = (
     candidate: Card,
     bidRound: 1 | 2,
     difficulty: Difficulty,
-    isDealer: boolean
+    isDealer: boolean,
+    enableNoTrump: boolean
 ): { action: 'take', suit: Suit | null, contract: ContractType } | { action: 'pass' } => {
     
     // Thresholds based on Difficulty
@@ -633,10 +655,12 @@ export const getBotBidDecision = (
         });
 
         // Check No Trump
-        const ntScore = analyzeHandStrength(hand, null, 'NO_TRUMP');
-        if (ntScore >= NO_TRUMP_THRESHOLD) {
-             if (!bestOption || ntScore > bestOption.score) {
-                bestOption = { suit: null, contract: 'NO_TRUMP', score: ntScore };
+        if (enableNoTrump) {
+            const ntScore = analyzeHandStrength(hand, null, 'NO_TRUMP');
+            if (ntScore >= NO_TRUMP_THRESHOLD) {
+                 if (!bestOption || ntScore > bestOption.score) {
+                    bestOption = { suit: null, contract: 'NO_TRUMP', score: ntScore };
+                }
             }
         }
 
@@ -656,8 +680,11 @@ export const getBotBidDecision = (
                 }
              });
              // Also check No Trump for forced pick
-             if (ntScore > forcedOption.score) {
-                 forcedOption = { suit: null, contract: 'NO_TRUMP', score: ntScore };
+             if (enableNoTrump) {
+                const ntScore = analyzeHandStrength(hand, null, 'NO_TRUMP');
+                 if (ntScore > forcedOption.score) {
+                     forcedOption = { suit: null, contract: 'NO_TRUMP', score: ntScore };
+                 }
              }
              
              return { action: 'take', suit: forcedOption.suit, contract: forcedOption.contract };

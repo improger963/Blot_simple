@@ -1,2 +1,1 @@
-// This file is deprecated and logic has been moved to hooks/useBotAgent.ts to run on the main thread.
-// Web Workers have been removed to simplify the architecture.
+// File deleted. Bot logic now runs on the main thread via useBotAgent.ts

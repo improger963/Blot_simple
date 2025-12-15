@@ -92,6 +92,14 @@ export interface Notification {
 export type Difficulty = 'beginner' | 'intermediate' | 'expert';
 export type TieResolution = 'defender_wins' | 'litige' | 'taker_wins';
 
+export interface EnabledCombinations {
+  TIERCE: boolean;
+  FIFTY: boolean;
+  HUNDRED: boolean;
+  CARRE: boolean;
+  BELOTE: boolean;
+}
+
 export interface GameSettings {
   gameSpeed: 'slow' | 'normal' | 'fast';
   soundEnabled: boolean;
@@ -102,6 +110,8 @@ export interface GameSettings {
   difficulty: Difficulty;
   targetScore: number; // 51, 101, 201, 501
   tieResolution: TieResolution;
+  enableNoTrump: boolean;
+  enabledCombinations: EnabledCombinations;
 }
 
 export interface GameState {

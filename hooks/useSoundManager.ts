@@ -26,7 +26,7 @@ export const useSoundManager = (enabled: boolean) => {
 
         const initAudio = () => {
             try {
-                // Generate on Main Thread using the utility
+                // Generate audio assets
                 const payload = generateThemeAssets();
 
                 if (active) {
@@ -38,7 +38,7 @@ export const useSoundManager = (enabled: boolean) => {
                         format: ['wav'],
                         sprite: SPRITES,
                         volume: 1.0,
-                        onload: () => console.log('🔊 ASMR Audio Engine Ready (Main Thread)'),
+                        onload: () => console.log('🔊 Audio Engine Ready'),
                         onloaderror: (id, err) => console.warn('Audio Load Error', err)
                     });
                 }

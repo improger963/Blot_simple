@@ -1,4 +1,6 @@
 
+
+
 import React, { useState } from 'react';
 import { Suit, Card } from '../types';
 import { SUITS, SUIT_NAMES, SUIT_SYMBOLS, SUIT_COLORS } from '../constants';
@@ -12,6 +14,7 @@ interface BiddingControlsProps {
   bidRound: 1 | 2;
   mustPick: boolean;
   soundEnabled: boolean;
+  enableNoTrump: boolean;
 }
 
 const XIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -27,7 +30,8 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
   onPass,
   bidRound,
   mustPick,
-  soundEnabled
+  soundEnabled,
+  enableNoTrump
 }) => {
   const { playSound } = useSoundManager(soundEnabled);
   const [pendingSelection, setPendingSelection] = useState<{ suit: Suit | null, isNoTrump: boolean } | null>(null);
@@ -178,14 +182,16 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
                     </div>
 
                     {/* NO TRUMP */}
-                    <div className="pl-6 border-l border-white/10">
-                        <button onClick={() => handleRound2Selection(null, true)} className="flex flex-col items-center gap-1.5 group">
-                            <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-indigo-400 group-hover:brightness-110 flex items-center justify-center transition-all shadow-lg group-hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-95">
-                                <span className="text-2xl font-black text-white font-serif">A</span>
-                            </div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 group-hover:text-indigo-200 transition-colors whitespace-nowrap">No Trump</span>
-                        </button>
-                    </div>
+                    {enableNoTrump && (
+                        <div className="pl-6 border-l border-white/10">
+                            <button onClick={() => handleRound2Selection(null, true)} className="flex flex-col items-center gap-1.5 group">
+                                <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-indigo-400 group-hover:brightness-110 flex items-center justify-center transition-all shadow-lg group-hover:shadow-[0_0_20px_rgba(99,102,241,0.5)] active:scale-95">
+                                    <span className="text-2xl font-black text-white font-serif">A</span>
+                                </div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 group-hover:text-indigo-200 transition-colors whitespace-nowrap">No Trump</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

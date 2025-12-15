@@ -1,5 +1,5 @@
 
-// Audio Synthesis Logic extracted from Worker and Hook
+// Audio Synthesis Logic
 
 // Sprite Map: [Start (ms), Duration (ms)]
 export const SPRITES: Record<string, [number, number]> = {

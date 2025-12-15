@@ -1,5 +1,4 @@
 
-
 import { useEffect, useRef } from 'react';
 import { GameState, Suit, Card, ContractType, Difficulty, Player } from '../types';
 import { getBotBidDecision, getBotMove, solveCombinationConflicts } from '../utils/gameLogic';
@@ -9,6 +8,7 @@ interface BotAgentProps {
     settings: {
         difficulty: Difficulty;
         gameSpeed: 'fast' | 'normal' | 'slow';
+        enableNoTrump: boolean;
     };
     onTake: (suit: Suit | null, keep: boolean, isNoTrump: boolean) => void;
     onPass: () => void;
@@ -38,8 +38,7 @@ export const useBotAgent = ({
         if (delayRef.current) clearTimeout(delayRef.current);
 
         delayRef.current = setTimeout(() => {
-            // Main Thread Logic Execution (Removed Worker)
-
+            // Main Thread Logic Execution
             if (phase === 'BIDDING') {
                 if (candidateCard) { // Check existence
                     const decision = getBotBidDecision(
@@ -47,7 +46,8 @@ export const useBotAgent = ({
                         candidateCard, 
                         bidRound, 
                         settings.difficulty, 
-                        dealerId === 'opponent'
+                        dealerId === 'opponent',
+                        settings.enableNoTrump
                     );
 
                     if (decision.action === 'take') {
