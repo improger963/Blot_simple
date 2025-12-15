@@ -1,1 +1,0 @@
-// File deleted. Bot logic now runs on the main thread via useBotAgent.ts
