@@ -1,4 +1,5 @@
 
+
 import { Card, Combination, Rank, Suit, TrickCard, Difficulty, ContractType } from '../types';
 import { 
     POINT_VALUES, 
@@ -41,33 +42,54 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
 
 // --- DISTRIBUTION LOGIC ---
 
-export const distributeCardsLogic = (
-    takerId: 'hero' | 'opponent',
-    remainingDeck: Card[],
-    candidate: Card,
-    keepCandidate: boolean,
-    currentHeroHand: Card[],
-    currentOppHand: Card[],
-    trumpSuit: Suit | null,
-    contractType: ContractType
-) => {
-    const newHeroHand = [...currentHeroHand];
-    const newOpponentHand = [...currentOppHand];
+interface DistributionParams {
+    takerId: 'hero' | 'opponent';
+    remainingDeck: Card[];
+    candidate: Card;
+    keepCandidate: boolean;
+    heroHand: Card[];
+    oppHand: Card[];
+    trumpSuit: Suit | null;
+    contractType: ContractType;
+}
+
+export const distributeCardsLogic = ({
+    takerId,
+    remainingDeck,
+    candidate,
+    keepCandidate,
+    heroHand,
+    oppHand,
+    trumpSuit,
+    contractType
+}: DistributionParams) => {
+    const newHeroHand = [...heroHand];
+    const newOpponentHand = [...oppHand];
 
     let extraTaker: Card[];
     let extraOpponent: Card[];
 
-    // Define distribution chunks based on logic
+    // Logic for distribution:
+    // Deck State: 24 cards total. 12 dealt initially (6 each). 1 Candidate. 11 Remaining in 'remainingDeck'.
+    //
+    // Scenario A: Keep Candidate (Round 1 Take OR Round 2 Keep Choice)
+    // Taker receives: Candidate + Top 2 cards from deck.
+    // Opponent receives: Next 3 cards from deck.
+    //
+    // Scenario B: Reject Candidate (Round 2 Choice)
+    // Taker receives: Top 3 cards from deck.
+    // Opponent receives: Next 3 cards from deck.
+    // Candidate is burned.
+
     if (keepCandidate) {
-        // Taker gets Candidate + Top 2 (3 total)
-        // Opponent gets next 3
+        // [Candidate, Deck[0], Deck[1]]
         extraTaker = [candidate, ...remainingDeck.slice(0, 2)];
+        // [Deck[2], Deck[3], Deck[4]]
         extraOpponent = remainingDeck.slice(2, 5);
     } else {
-        // Candidate burned
-        // Taker gets Top 3
-        // Opponent gets next 3
+        // [Deck[0], Deck[1], Deck[2]]
         extraTaker = remainingDeck.slice(0, 3);
+        // [Deck[3], Deck[4], Deck[5]]
         extraOpponent = remainingDeck.slice(3, 6);
     }
 
@@ -471,12 +493,6 @@ export const compareDeclarations = (
 
 /**
  * Advanced Hand Analysis for Bidding
- * Calculates a "Bid Score" representing the estimated strength of the hand.
- * 
- * Approximate Benchmarks:
- * - 40-50 pts: Weak but playable
- * - 50-70 pts: Strong bid
- * - 70+ pts: Very strong
  */
 export const analyzeHandStrength = (
     hand: Card[], 
@@ -689,6 +705,13 @@ export const sortHand = (hand: Card[], trumpSuit: Suit | null = null, contractTy
     }
 
     // 3. Rank Order
+    if (contractType === 'NO_TRUMP') {
+        // Value-based sorting for No Trump: 9(0) < J(2) < Q(3) < K(4) < 10(10) < A(19)
+        // Uses the indices from ORDER_NO_TRUMP_MODE ['9', 'J', 'Q', 'K', '10', 'A']
+        return ORDER_NO_TRUMP_MODE.indexOf(a.rank) - ORDER_NO_TRUMP_MODE.indexOf(b.rank);
+    }
+
+    // Standard Visual Order: 9 < 10 < J < Q < K < A
     return VISUAL_SORT_ORDER.indexOf(a.rank) - VISUAL_SORT_ORDER.indexOf(b.rank);
   });
 };

@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { LastRoundData } from '../types';
 import { CountUp } from './UI';
@@ -19,23 +20,38 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
     currentScores, 
     target 
 }) => {
-    const { hero, opponent, roundInfo } = data;
+    const { hero, opponent, roundInfo, litigePoints } = data;
     const isCapot = roundInfo.status === 'CAPOT';
     const isDedans = roundInfo.status === 'DEDANS';
+    const isLitige = roundInfo.status === 'LITIGE';
     
     // Calculate previous table scores to animate the bar from
+    // Note: If Litige, currentScores includes logic handled in App.tsx (nothing added usually, or carried over stored)
+    // We assume currentScores passed here are the updated totals.
     const prevHeroScore = Math.max(0, currentScores.hero - hero.finalPoints);
     const prevOppScore = Math.max(0, currentScores.opponent - opponent.finalPoints);
 
-    // Dedans Animation State
-    const [dedansAnim, setDedansAnim] = useState(false);
+    // Dedans/Litige Animation State
+    const [statusAnim, setStatusAnim] = useState(false);
 
     useEffect(() => {
-        if (isDedans) {
-            const t = setTimeout(() => setDedansAnim(true), 500);
+        if (isDedans || isLitige) {
+            const t = setTimeout(() => setStatusAnim(true), 500);
             return () => clearTimeout(t);
         }
-    }, [isDedans]);
+    }, [isDedans, isLitige]);
+
+    const getHeaderGradient = () => {
+        if (isLitige) return 'bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900';
+        if (roundInfo.winnerId === 'hero') return 'bg-gradient-to-br from-emerald-900 via-emerald-800 to-slate-900';
+        return 'bg-gradient-to-br from-rose-900 via-rose-800 to-slate-900';
+    };
+
+    const getTitle = () => {
+        if (isLitige) return 'Litige (Tie)';
+        if (roundInfo.winnerId === 'hero') return 'Round Won';
+        return 'Round Lost';
+    };
 
     return (
         <div className={`fixed inset-0 flex items-center justify-center z-[${Z_INDEX.MODALS_BACKDROP}] p-4`}>
@@ -50,9 +66,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                 {/* --- HEADER --- */}
                 <div className={`
                     p-6 text-center relative overflow-hidden
-                    ${roundInfo.winnerId === 'hero' 
-                        ? 'bg-gradient-to-br from-emerald-900 via-emerald-800 to-slate-900' 
-                        : 'bg-gradient-to-br from-rose-900 via-rose-800 to-slate-900'}
+                    ${getHeaderGradient()}
                 `}>
                     <div className="relative z-10">
                         <span className="inline-block px-3 py-1 rounded-full bg-black/30 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-white/70 mb-2">
@@ -60,27 +74,32 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                         </span>
                         
                         <h2 className="text-4xl md:text-5xl font-serif font-black text-white mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
-                            {roundInfo.winnerId === 'hero' ? 'Round Won' : 'Round Lost'}
+                            {getTitle()}
                         </h2>
 
                         {/* Animated Contract Status Text */}
-                        {(isCapot || isDedans) && (
+                        {(isCapot || isDedans || isLitige) && (
                             <motion.div 
                                 initial={{ scale: 0, rotate: -10 }}
                                 animate={{ scale: 1, rotate: 0 }}
                                 transition={{ type: 'spring', bounce: 0.5 }}
-                                className="inline-flex items-center justify-center gap-2 mt-2 px-6 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 rounded-lg shadow-lg border border-yellow-300 transform"
+                                className={`inline-flex items-center justify-center gap-2 mt-2 px-6 py-2 rounded-lg shadow-lg border transform
+                                    ${isLitige 
+                                        ? 'bg-gradient-to-r from-slate-600 to-slate-500 border-slate-400' 
+                                        : 'bg-gradient-to-r from-amber-500 to-yellow-600 border-yellow-300'
+                                    }
+                                `}
                             >
                                 <span className="text-2xl font-black text-black tracking-tighter">
-                                    {isCapot ? 'CAPOT !' : 'DEDANS !'}
+                                    {isCapot ? 'CAPOT !' : (isLitige ? 'LITIGE !' : 'DEDANS !')}
                                 </span>
                                 <span className="text-xs font-bold text-black/80 bg-white/20 px-2 py-0.5 rounded">
-                                    {isCapot ? '+21 Table Pts' : 'All Points Lost'}
+                                    {isCapot ? '+21 Table Pts' : (isLitige ? `${litigePoints} Pts Saved` : 'All Points Lost')}
                                 </span>
                             </motion.div>
                         )}
                         
-                        {!isCapot && !isDedans && (
+                        {!isCapot && !isDedans && !isLitige && (
                             <div className="text-sm text-white/60 font-medium mt-1">
                                 Contract: {roundInfo.bidTaker === 'hero' ? 'You' : 'Opponent'} took {roundInfo.contractType === 'NO_TRUMP' ? 'NO TRUMP' : (roundInfo.trump && SUIT_SYMBOLS[roundInfo.trump])}
                             </div>
@@ -97,22 +116,25 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                     {/* VS Divider */}
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center justify-center w-10 h-10 bg-slate-800 rounded-full border border-white/10 z-10 font-black text-slate-500 text-xs">VS</div>
 
-                    {/* DEDANS ANIMATION OVERLAY */}
-                    {isDedans && dedansAnim && (
+                    {/* DEDANS/LITIGE ANIMATION OVERLAY */}
+                    {(isDedans || isLitige) && statusAnim && (
                         <motion.div 
-                            initial={{ opacity: 0, x: roundInfo.bidTaker === 'hero' ? 0 : 0 }}
-                            animate={{ opacity: [0, 1, 0], x: roundInfo.bidTaker === 'hero' ? 200 : -200 }}
+                            initial={{ opacity: 0, x: 0 }}
+                            animate={{ opacity: [0, 1, 0], x: isLitige ? 0 : (roundInfo.bidTaker === 'hero' ? 200 : -200) }}
                             transition={{ duration: 1.5, ease: "easeInOut" }}
                             className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
                         >
-                            <div className="text-amber-400 font-black text-2xl drop-shadow-lg bg-black/50 px-4 py-2 rounded-xl backdrop-blur-sm border border-amber-500/50">
-                                💸 Points Transfer
+                            <div className={`
+                                font-black text-2xl drop-shadow-lg bg-black/50 px-4 py-2 rounded-xl backdrop-blur-sm border 
+                                ${isLitige ? 'text-white border-white/30' : 'text-amber-400 border-amber-500/50'}
+                            `}>
+                                {isLitige ? '🔒 Points Locked' : '💸 Points Transfer'}
                             </div>
                         </motion.div>
                     )}
 
                     {/* HERO COLUMN */}
-                    <div className={`flex-1 flex flex-col gap-4 transition-opacity duration-500 ${isDedans && roundInfo.bidTaker === 'hero' && dedansAnim ? 'opacity-30' : 'opacity-100'}`}>
+                    <div className={`flex-1 flex flex-col gap-4 transition-opacity duration-500 ${(isDedans && roundInfo.bidTaker === 'hero' && statusAnim) || (isLitige && roundInfo.bidTaker === 'hero') ? 'opacity-40' : 'opacity-100'}`}>
                         <div className="flex items-center gap-4 border-b border-white/5 pb-4">
                             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-900 flex items-center justify-center text-2xl shadow-lg border-2 border-white/10">
                                 😎
@@ -167,7 +189,7 @@ export const RoundResultModal: React.FC<RoundResultModalProps> = ({
                     </div>
 
                     {/* OPPONENT COLUMN */}
-                    <div className={`flex-1 flex flex-col gap-4 md:text-right transition-opacity duration-500 ${isDedans && roundInfo.bidTaker === 'opponent' && dedansAnim ? 'opacity-30' : 'opacity-100'}`}>
+                    <div className={`flex-1 flex flex-col gap-4 md:text-right transition-opacity duration-500 ${(isDedans && roundInfo.bidTaker === 'opponent' && statusAnim) || (isLitige && roundInfo.bidTaker === 'opponent') ? 'opacity-40' : 'opacity-100'}`}>
                         <div className="flex flex-row-reverse md:flex-row items-center gap-4 border-b border-white/5 pb-4 justify-between md:justify-end">
                             <div className="text-right">
                                 <h3 className="text-rose-400 font-bold text-lg uppercase tracking-wider">Opponent</h3>

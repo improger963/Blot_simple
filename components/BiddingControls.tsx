@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { Suit, Card } from '../types';
 import { SUITS, SUIT_NAMES, SUIT_SYMBOLS, SUIT_COLORS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSoundManager } from '../hooks/useSoundManager';
 
 interface BiddingControlsProps {
   candidateCard: Card;
@@ -9,6 +11,7 @@ interface BiddingControlsProps {
   onPass: () => void;
   bidRound: 1 | 2;
   mustPick: boolean;
+  soundEnabled: boolean;
 }
 
 const XIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -23,8 +26,10 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
   onTake,
   onPass,
   bidRound,
-  mustPick
+  mustPick,
+  soundEnabled
 }) => {
+  const { playSound } = useSoundManager(soundEnabled);
   const [pendingSelection, setPendingSelection] = useState<{ suit: Suit | null, isNoTrump: boolean } | null>(null);
 
   const variants = {
@@ -33,6 +38,7 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
   };
 
   const handleRound2Selection = (suit: Suit | null, isNoTrump: boolean) => {
+      playSound('ui_click');
       setPendingSelection({ suit, isNoTrump });
   };
 
@@ -68,13 +74,13 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
                     </p>
                     <div className="flex gap-3 w-full px-2">
                         <button 
-                            onClick={() => confirmTake(false)}
+                            onClick={() => { playSound('ui_click'); confirmTake(false); }}
                             className="flex-1 py-3 rounded-xl bg-slate-700/50 border border-white/5 text-slate-300 font-bold text-xs uppercase hover:bg-slate-600 transition-colors"
                         >
                             Discard
                         </button>
                         <button 
-                            onClick={() => confirmTake(true)}
+                            onClick={() => { playSound('ui_click'); confirmTake(true); }}
                             className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs uppercase hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-900/50"
                         >
                             Keep
@@ -105,7 +111,7 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
                 <div className="flex items-center gap-4 md:gap-8">
                     {/* PASS */}
                     {!mustPick && (
-                         <button onClick={onPass} className="flex flex-col items-center gap-1.5 group">
+                         <button onClick={() => { playSound('ui_click'); onPass(); }} className="flex flex-col items-center gap-1.5 group">
                              <div className="w-14 h-14 rounded-full bg-slate-800 border border-slate-600 group-hover:border-rose-500 group-hover:bg-rose-500 flex items-center justify-center transition-all shadow-lg active:scale-95">
                                  <XIcon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
                              </div>
@@ -123,7 +129,7 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
                     </div>
 
                     {/* TAKE */}
-                    <button onClick={() => onTake(candidateCard.suit, true, false)} className="flex flex-col items-center gap-1.5 group">
+                    <button onClick={() => { playSound('ui_click'); onTake(candidateCard.suit, true, false); }} className="flex flex-col items-center gap-1.5 group">
                         <div className="w-14 h-14 rounded-full bg-emerald-600 border border-emerald-400 group-hover:bg-emerald-500 group-hover:scale-105 flex items-center justify-center transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95">
                             <CheckIcon className="w-7 h-7 text-white" />
                         </div>
@@ -138,7 +144,7 @@ export const BiddingControls: React.FC<BiddingControlsProps> = ({
                     {/* PASS */}
                     {!mustPick && (
                         <div className="pr-6 border-r border-white/10">
-                            <button onClick={onPass} className="flex flex-col items-center gap-1.5 group">
+                            <button onClick={() => { playSound('ui_click'); onPass(); }} className="flex flex-col items-center gap-1.5 group">
                                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-slate-800 border border-slate-600 group-hover:border-rose-500 group-hover:bg-rose-500 flex items-center justify-center transition-all shadow-lg active:scale-95">
                                     <XIcon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
                                 </div>

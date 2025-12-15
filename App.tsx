@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Card, GameState, Player, Suit, Combination, GamePhase, NotificationType, GameSettings, ContractType } from './types';
 import { Table } from './components/Table';
@@ -8,10 +10,11 @@ import { VictoryModal } from './components/VictoryModal';
 import { RulesModal } from './components/RulesModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ConnectionManager } from './components/ConnectionManager';
-import { createDeck, canPlayCard, getWinningCard, getCardPoints, getBotMove, getBotBidDecision, compareDeclarations, solveCombinationConflicts, verifyRuleset, distributeCardsLogic, sortHand } from './utils/gameLogic';
+import { createDeck, canPlayCard, getWinningCard, getCardPoints, compareDeclarations, solveCombinationConflicts, verifyRuleset, distributeCardsLogic, sortHand } from './utils/gameLogic';
 import { calculateRoundResult } from './utils/calculateRoundResult';
 import { useHaptics } from './hooks/useHaptics';
 import { useSoundManager } from './hooks/useSoundManager';
+import { useBotAgent } from './hooks/useBotAgent';
 
 // --- INITIAL STATES ---
 const INITIAL_PLAYER_STATE: Player = {
@@ -22,7 +25,7 @@ const INITIAL_OPPONENT_STATE: Player = {
 };
 
 const DEFAULT_SETTINGS: GameSettings = {
-    gameSpeed: 'normal', soundEnabled: true, hapticsEnabled: true, highContrast: false, cardSize: 'normal', animationsEnabled: true, difficulty: 'intermediate', targetScore: 51
+    gameSpeed: 'normal', soundEnabled: true, hapticsEnabled: true, highContrast: false, cardSize: 'normal', animationsEnabled: true, difficulty: 'intermediate', targetScore: 51, tieResolution: 'litige'
 };
 
 const App: React.FC = () => {
@@ -48,7 +51,8 @@ const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
     phase: 'DEALING', deck: [], players: { hero: { ...INITIAL_PLAYER_STATE }, opponent: { ...INITIAL_OPPONENT_STATE } },
     candidateCard: null, trumpSuit: null, contractType: 'TRUMP', currentTrick: [], lastTrick: null, currentPlayerId: 'hero', 
-    dealerId: 'opponent', bidTaker: null, bidRound: 1, declarations: [], gameTarget: settings.targetScore, trickCount: 0, roundHistory: [], a11yAnnouncement: "Welcome to Simple Blot 24"
+    dealerId: 'opponent', bidTaker: null, bidRound: 1, playerChoice: null, declarations: [], gameTarget: settings.targetScore, trickCount: 0, roundHistory: [], a11yAnnouncement: "Welcome to Simple Blot 24",
+    carriedOverPoints: 0
   });
 
   // Keep a ref to gameState for stable access in callbacks without triggering re-renders of dependents
@@ -81,15 +85,13 @@ const App: React.FC = () => {
 
   const startNewGame = useCallback((resetScore = false) => {
     setGameState(prev => {
-        // Reset Logic is now simpler: We only check if we explicitely requested a reset (from victory screen or forfeit)
-        // or if we are just starting a new round in the same game.
-        
         let heroScore = prev.players.hero.score;
         let oppScore = prev.players.opponent.score;
         let roundHistory = prev.roundHistory;
+        let carriedOverPoints = prev.carriedOverPoints;
         
         if (resetScore) {
-            heroScore = 0; oppScore = 0; roundHistory = [];
+            heroScore = 0; oppScore = 0; roundHistory = []; carriedOverPoints = 0;
         }
 
         const deck = createDeck();
@@ -111,10 +113,11 @@ const App: React.FC = () => {
             opponent: { ...INITIAL_OPPONENT_STATE, hand: opponentHand, score: oppScore },
           },
           dealerId: newDealer, candidateCard: candidate, currentPlayerId: firstBidder, bidRound: 1, trumpSuit: null,
-          contractType: 'TRUMP', bidTaker: null, currentTrick: [], lastTrick: null, trickCount: 0,
+          contractType: 'TRUMP', bidTaker: null, playerChoice: null, currentTrick: [], lastTrick: null, trickCount: 0,
           declarations: [`New Round. Dealer: ${newDealer === 'hero' ? 'You' : 'Opp'}.`],
           lastRoundBreakdown: undefined, roundHistory,
-          a11yAnnouncement: 'New round started'
+          a11yAnnouncement: 'New round started',
+          carriedOverPoints
         };
     });
     setDeclarationTimer(null);
@@ -177,9 +180,35 @@ const App: React.FC = () => {
 
           // Final Scoring
           if (isLastTrick) {
-              const final = calculateRoundResult(nextState);
-              nextState.players.hero.score = final.hero.finalPoints + prev.players.hero.score;
-              nextState.players.opponent.score = final.opponent.finalPoints + prev.players.opponent.score;
+              const final = calculateRoundResult(nextState, settings.tieResolution);
+              
+              let hScore = final.hero.finalPoints;
+              let oScore = final.opponent.finalPoints;
+              let nextCarriedPoints = prev.carriedOverPoints;
+
+              // Litige Handling
+              if (final.roundInfo.status === 'LITIGE') {
+                   // Add the litige amount to storage
+                   nextCarriedPoints += (final.litigePoints || 0);
+                   addNotification('warning', `LITIGE! ${final.litigePoints} points stored.`);
+              } else {
+                   // If there is a clear winner and there are stored points, winner takes them
+                   // Usually the round winner takes the litige points.
+                   if (final.roundInfo.winnerId !== 'none' && prev.carriedOverPoints > 0) {
+                       if (final.roundInfo.winnerId === 'hero') {
+                           hScore += prev.carriedOverPoints;
+                           addNotification('success', `Litige Won! +${prev.carriedOverPoints} pts`);
+                       } else {
+                           oScore += prev.carriedOverPoints;
+                           addNotification('warning', `Opponent Won Litige! +${prev.carriedOverPoints} pts`);
+                       }
+                       nextCarriedPoints = 0; // Reset after awarding
+                   }
+              }
+
+              nextState.players.hero.score = hScore + prev.players.hero.score;
+              nextState.players.opponent.score = oScore + prev.players.opponent.score;
+              nextState.carriedOverPoints = nextCarriedPoints;
               
               if (final.roundInfo.status === 'CAPOT') {
                   setFxState(f => ({ ...f, screenShake: true }));
@@ -187,10 +216,12 @@ const App: React.FC = () => {
                   playSound('win_fanfare');
               } else if (final.roundInfo.winnerId === 'hero') {
                   playSound('win_fanfare', { volume: 0.6 });
+              } else if (final.roundInfo.status === 'LITIGE') {
+                  playSound('ui_error', { volume: 0.4 });
               }
 
               nextState.roundHistory.push({
-                  roundNumber: prev.roundHistory.length + 1, heroScore: final.hero.finalPoints, opponentScore: final.opponent.finalPoints,
+                  roundNumber: prev.roundHistory.length + 1, heroScore: hScore, opponentScore: oScore,
                   trump: prev.trumpSuit, winner: final.roundInfo.winnerId, contractStatus: final.roundInfo.status,
                   bidTaker: prev.bidTaker!, contractType: prev.contractType, details: final
               });
@@ -198,7 +229,7 @@ const App: React.FC = () => {
           }
           return nextState;
       });
-  }, [addNotification, playSound, triggerHaptic]);
+  }, [addNotification, playSound, triggerHaptic, settings.tieResolution]);
 
   // --- PLAYER ACTIONS ---
 
@@ -211,8 +242,6 @@ const App: React.FC = () => {
         setDeclarationComplete(true); 
     }
 
-    // Schedule resolution if this card completes the trick
-    // Check against current state using ref to ensure stability and avoid dependency cycles
     const currentTrickLen = gameStateRef.current.currentTrick.length;
     if (currentTrickLen === 1) {
          setTimeout(() => resolveTrick(), 1500);
@@ -274,24 +303,37 @@ const App: React.FC = () => {
     setGameState(prev => {
         const takerId = prev.currentPlayerId;
         const contractType = isNoTrump ? 'NO_TRUMP' : 'TRUMP';
-        const dist = distributeCardsLogic(
-            takerId, prev.deck, prev.candidateCard!, keepCandidate,
-            prev.players.hero.hand, prev.players.opponent.hand,
-            isNoTrump ? null : suit, contractType
-        );
+        
+        // Revised distribution call with explicit params object
+        const dist = distributeCardsLogic({
+            takerId,
+            remainingDeck: prev.deck,
+            candidate: prev.candidateCard!,
+            keepCandidate,
+            heroHand: prev.players.hero.hand,
+            oppHand: prev.players.opponent.hand,
+            trumpSuit: isNoTrump ? null : suit,
+            contractType
+        });
         
         const msg = `${takerId === 'hero' ? 'You' : 'Opponent'} took ${isNoTrump ? 'NO TRUMP' : suit}`;
         addNotification('success', msg);
         playSound('turn_start');
 
         return {
-            ...prev, trumpSuit: isNoTrump ? null : suit, contractType, bidTaker: takerId, phase: 'DISTRIBUTING',
+            ...prev, 
+            trumpSuit: isNoTrump ? null : suit, 
+            contractType, 
+            bidTaker: takerId, 
+            phase: 'DISTRIBUTING',
+            playerChoice: keepCandidate ? 'kept' : 'rejected', // Track explicit choice
             players: {
                 hero: { ...prev.players.hero, hand: dist.heroHand, combinations: dist.heroCombos },
                 opponent: { ...prev.players.opponent, hand: dist.opponentHand, combinations: dist.oppCombos },
             },
             currentPlayerId: prev.dealerId === 'hero' ? 'opponent' : 'hero',
-            declarations: [...prev.declarations, msg], a11yAnnouncement: msg
+            declarations: [...prev.declarations, msg], 
+            a11yAnnouncement: msg
         };
     });
   }, [addNotification, playSound]);
@@ -304,6 +346,7 @@ const App: React.FC = () => {
 
         if (isJackConstraint || isDealerConstraint) {
             addNotification('warning', 'You must take!');
+            playSound('ui_error');
             return prev;
         }
 
@@ -373,59 +416,15 @@ const App: React.FC = () => {
       });
   }, [addNotification, playSound, triggerHaptic]);
 
-  // --- BOT LOGIC EFFECT (Isolated) ---
-  useEffect(() => {
-    const { phase, currentPlayerId, currentTrick } = gameState;
-    
-    // Bot Turn Logic
-    const isBotTurn = currentPlayerId === 'opponent';
-    const delay = settings.gameSpeed === 'fast' ? 100 : settings.gameSpeed === 'slow' ? 500 : 250;
-    
-    if (!isBotTurn) return;
-
-    let timer: ReturnType<typeof setTimeout>;
-
-    if (phase === 'BIDDING') {
-       timer = setTimeout(() => {
-           const { players, candidateCard, bidRound, dealerId } = gameState;
-           const decision = getBotBidDecision(players.opponent.hand, candidateCard!, bidRound, settings.difficulty, dealerId === 'opponent');
-           if (decision.action === 'take') {
-               const keep = (decision.suit === candidateCard!.suit) || bidRound === 1;
-               handleTake(decision.suit || null, keep, decision.contract === 'NO_TRUMP');
-           } else {
-               handlePass();
-           }
-       }, delay);
-    } else if (phase === 'PLAYING') {
-        // Only trigger bot play if the trick is waiting for a card
-        if (currentTrick.length < 2) {
-             timer = setTimeout(() => {
-                 // Opponent Declaration (Trick 0)
-                 if (gameState.trickCount === 0 && !gameState.players.opponent.hasShownCombinations) {
-                     let oppCombos = [];
-                     if (gameState.players.opponent.combinations.length > 0) oppCombos = solveCombinationConflicts(gameState.players.opponent.combinations);
-                     const belote = gameState.players.opponent.combinations.find(c => c.type === 'BELOTE');
-                     if (belote && !oppCombos.some(c => c.type === 'BELOTE')) oppCombos.push(belote);
-                     
-                     if (oppCombos.length > 0) {
-                         const txt = oppCombos.filter(c => c.type !== 'BELOTE').map(c => c.type).join(', ');
-                         if (txt) setGameState(p => ({ ...p, players: { ...p.players, opponent: { ...p.players.opponent, declaredCombinations: oppCombos, hasShownCombinations: true, lastAction: `Announced: ${txt}` } } }));
-                         else setGameState(p => ({ ...p, players: { ...p.players, opponent: { ...p.players.opponent, hasShownCombinations: true } } }));
-                     } else {
-                         setGameState(p => ({ ...p, players: { ...p.players, opponent: { ...p.players.opponent, hasShownCombinations: true } } }));
-                     }
-                 }
-
-                 // Play Card
-                 const played = [...gameState.players.hero.capturedCards, ...gameState.players.opponent.capturedCards];
-                 const move = getBotMove(gameState.players.opponent.hand, gameState.currentTrick, gameState.trumpSuit, gameState.contractType, settings.difficulty, played);
-                 handlePlayCard(move, 'opponent');
-             }, delay);
-        }
-    }
-
-    return () => clearTimeout(timer);
-  }, [gameState, settings, handleTake, handlePass, handlePlayCard]);
+  // --- BOT WORKER INTEGRATION ---
+  useBotAgent({
+    gameState,
+    settings: { difficulty: settings.difficulty, gameSpeed: settings.gameSpeed },
+    onTake: handleTake,
+    onPass: handlePass,
+    onPlayCard: handlePlayCard,
+    setGameState
+  });
 
   // --- GAMEPLAY TRIGGERS ---
   
@@ -460,7 +459,6 @@ const App: React.FC = () => {
       ? gameState.players.hero.hand.filter(c => canPlayCard(gameState.players.hero.hand, c, gameState.currentTrick, gameState.trumpSuit, gameState.contractType)) : [];
   const canDeclare = gameState.phase === 'PLAYING' && gameState.trickCount === 0 && gameState.currentPlayerId === 'hero' && gameState.players.hero.combinations.some(c => c.type !== 'BELOTE') && !declarationComplete;
   
-  // Confetti for Victory
   const isVictory = gameState.phase === 'FINISHED' && gameState.players.hero.score >= gameState.players.opponent.score;
 
   return (
@@ -486,7 +484,7 @@ const App: React.FC = () => {
                 />
 
                 {gameState.phase === 'BIDDING' && gameState.candidateCard && (
-                    <BiddingControls candidateCard={gameState.candidateCard} onTake={handleTake} onPass={handlePass} bidRound={gameState.bidRound} mustPick={mustPick} />
+                    <BiddingControls candidateCard={gameState.candidateCard} onTake={handleTake} onPass={handlePass} bidRound={gameState.bidRound} mustPick={mustPick} soundEnabled={settings.soundEnabled} />
                 )}
 
                 {gameState.lastRoundBreakdown && gameState.phase === 'SCORING' && (

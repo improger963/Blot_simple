@@ -1,12 +1,13 @@
 
-import { GameState, LastRoundData, ContractStatus } from '../types';
+
+import { GameState, LastRoundData, ContractStatus, TieResolution } from '../types';
 import { getCardPoints } from './gameLogic';
 
 /**
  * Calculates the final scores for a completed round of Simple Blot 24.
  * Handles Capot, Dedans, Declaration validity, and Table Point conversion.
  */
-export const calculateRoundResult = (state: GameState): LastRoundData => {
+export const calculateRoundResult = (state: GameState, tieResolution: TieResolution = 'litige'): LastRoundData => {
     const { players, bidTaker, trumpSuit, contractType } = state;
     
     // 1. Raw Card Points (Sum of captured tricks)
@@ -28,8 +29,6 @@ export const calculateRoundResult = (state: GameState): LastRoundData => {
     const oLast = (lastTrickWinner === 'opponent') ? 10 : 0;
 
     // 4. Declarations (Only Valid/Shown ones)
-    // Note: resolveTrick in App.tsx already handles the "Stronger wins" logic during Trick 1.
-    // So 'declaredCombinations' in state are already filtered for validity against each other.
     const hDeclList = players.hero.declaredCombinations;
     const oDeclList = players.opponent.declaredCombinations;
     
@@ -49,16 +48,14 @@ export const calculateRoundResult = (state: GameState): LastRoundData => {
     let status: ContractStatus = 'NORMAL';
     let hFinalRaw = 0;
     let oFinalRaw = 0;
-    let winnerId: 'hero' | 'opponent' = 'hero';
+    let winnerId: 'hero' | 'opponent' | 'none' = 'none';
+    let litigePoints = 0;
 
     // --- LOGIC BRANCHES ---
 
     if (isHeroCapot) {
         status = 'CAPOT';
-        // Capot Winner gets 212 (162 + 50 Bonus) + Their Declarations
         hFinalRaw = 212 + hDeclScore;
-        // Opponent gets 0. 
-        // Rule: If opponent takes 0 tricks, their declarations (except Belote) are voided.
         oFinalRaw = oBeloteScore; 
         winnerId = 'hero';
     } else if (isOppCapot) {
@@ -69,20 +66,49 @@ export const calculateRoundResult = (state: GameState): LastRoundData => {
     } else {
         // Normal Play - Check Contract
         if (bidTaker === 'hero') {
-            // Hero must score more than Opponent to win contract
             if (hRawTotal > oRawTotal) {
+                // Taker Wins
                 status = 'NORMAL';
                 hFinalRaw = hRawTotal;
                 oFinalRaw = oRawTotal;
                 winnerId = 'hero';
-            } else {
-                status = 'DEDANS'; // Contract Failed
+            } else if (hRawTotal < oRawTotal) {
+                // Dedans (Taker Loses)
+                status = 'DEDANS';
                 winnerId = 'opponent';
-                // Taker loses everything except Belote
                 hFinalRaw = hBeloteScore;
-                // Opponent gets 162 + Taker's Decl (minus Belote) + Opponent's Decl
                 const hDeclPointsTransfer = hDeclScore - hBeloteScore;
                 oFinalRaw = TOTAL_GAME_POINTS + hDeclPointsTransfer + oDeclScore;
+            } else {
+                // TIE
+                if (tieResolution === 'taker_wins') {
+                    status = 'NORMAL';
+                    hFinalRaw = hRawTotal;
+                    oFinalRaw = oRawTotal;
+                    winnerId = 'hero';
+                } else if (tieResolution === 'defender_wins') {
+                    status = 'DEDANS';
+                    winnerId = 'opponent';
+                    hFinalRaw = hBeloteScore;
+                    const hDeclPointsTransfer = hDeclScore - hBeloteScore;
+                    oFinalRaw = TOTAL_GAME_POINTS + hDeclPointsTransfer + oDeclScore;
+                } else {
+                    // LITIGE
+                    status = 'LITIGE';
+                    winnerId = 'none';
+                    // Defender gets their points
+                    oFinalRaw = oRawTotal;
+                    // Taker gets nothing (except Belote if strictly following standard, or 0 if pure)
+                    // Standard: Belote is always kept.
+                    hFinalRaw = hBeloteScore;
+                    // Litige: The points in dispute = Taker's would-be score (hRawTotal - hBeloteScore).
+                    // Or usually defined as: 162 total is split?
+                    // In simple calculation: hRawTotal + oRawTotal should roughly be 162 + declarations.
+                    // If 81-81: Defender gets 81. Taker gets 0. 81 stored.
+                    // So we store `hRawTotal` (excluding belote if it was added? Usually hRawTotal is correct).
+                    // Let's store the Taker's raw total (minus Belote which they keep).
+                    litigePoints = hRawTotal - hBeloteScore;
+                }
             }
         } else {
             // Opponent is Taker
@@ -91,28 +117,48 @@ export const calculateRoundResult = (state: GameState): LastRoundData => {
                 hFinalRaw = hRawTotal;
                 oFinalRaw = oRawTotal;
                 winnerId = 'opponent';
-            } else {
-                status = 'DEDANS'; // Contract Failed
+            } else if (oRawTotal < hRawTotal) {
+                status = 'DEDANS';
                 winnerId = 'hero';
                 oFinalRaw = oBeloteScore;
                 const oDeclPointsTransfer = oDeclScore - oBeloteScore;
                 hFinalRaw = TOTAL_GAME_POINTS + oDeclPointsTransfer + hDeclScore;
+            } else {
+                // TIE
+                if (tieResolution === 'taker_wins') {
+                    status = 'NORMAL';
+                    hFinalRaw = hRawTotal;
+                    oFinalRaw = oRawTotal;
+                    winnerId = 'opponent';
+                } else if (tieResolution === 'defender_wins') {
+                    status = 'DEDANS';
+                    winnerId = 'hero';
+                    oFinalRaw = oBeloteScore;
+                    const oDeclPointsTransfer = oDeclScore - oBeloteScore;
+                    hFinalRaw = TOTAL_GAME_POINTS + oDeclPointsTransfer + hDeclScore;
+                } else {
+                    // LITIGE
+                    status = 'LITIGE';
+                    winnerId = 'none';
+                    hFinalRaw = hRawTotal;
+                    oFinalRaw = oBeloteScore;
+                    litigePoints = oRawTotal - oBeloteScore;
+                }
             }
         }
     }
 
-    // 6. Point Conversion (Raw -> Table Points)
-    // Custom Blot Rounding: "Round Half Down" / Threshold 6
-    // e.g. 25 -> 2, 26 -> 3.
-    // Formula: floor((score + 4) / 10)
+    // 6. Point Conversion
     const convertToTablePoints = (raw: number) => {
-        // Special Rule for pure Capot (212) -> 21
         if (raw === 212) return 21;
-        
         if (raw === 0) return 0;
-
         return Math.floor((raw + 4) / 10);
     };
+
+    // For Litige points, we also convert them to table points before storing, or store raw?
+    // Convention: Scoreboard shows Table Points (501 target). Litige should be stored as raw then converted, or stored as table?
+    // Let's store as Table Points to be consistent with finalPoints addition.
+    const litigeTablePoints = convertToTablePoints(litigePoints);
 
     const hTablePoints = convertToTablePoints(hFinalRaw);
     const oTablePoints = convertToTablePoints(oFinalRaw);
@@ -123,8 +169,8 @@ export const calculateRoundResult = (state: GameState): LastRoundData => {
             rawDeclPoints: hDeclScore,
             lastTrickBonus: hLast,
             beloteBonus: hBeloteScore,
-            finalPoints: hTablePoints, // Store TABLE points for global score
-            rawFinalPoints: hFinalRaw, // Store RAW points for display/debug
+            finalPoints: hTablePoints,
+            rawFinalPoints: hFinalRaw,
             capturedCardsCount: players.hero.capturedCards.length,
             declaredCombos: hDeclList
         },
@@ -145,6 +191,7 @@ export const calculateRoundResult = (state: GameState): LastRoundData => {
             status,
             contractType,
             winnerId
-        }
+        },
+        litigePoints: litigeTablePoints
     };
 };

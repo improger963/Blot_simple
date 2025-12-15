@@ -1,8 +1,10 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Combination } from '../types';
 import { SUIT_COLORS, SUIT_SYMBOLS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CardComponent } from './Card';
+import { useSoundManager } from '../hooks/useSoundManager';
 
 interface CombinationControlsProps {
     combinations: Combination[];
@@ -10,9 +12,11 @@ interface CombinationControlsProps {
     phase: 'DECLARE' | 'SHOW';
     timeLeft?: number; // Optional timer for visual urgency
     revealOwner?: 'hero' | 'opponent' | null;
+    soundEnabled: boolean;
 }
 
-export const CombinationControls: React.FC<CombinationControlsProps> = ({ combinations, onDeclare, phase, timeLeft, revealOwner }) => {
+export const CombinationControls: React.FC<CombinationControlsProps> = ({ combinations, onDeclare, phase, timeLeft, revealOwner, soundEnabled }) => {
+    const { playSound } = useSoundManager(soundEnabled);
     // Filter out BELOTE from UI as it is announced separately during play
     const displayableCombinations = useMemo(() => {
         return combinations.filter(c => c.type !== 'BELOTE');
@@ -37,6 +41,7 @@ export const CombinationControls: React.FC<CombinationControlsProps> = ({ combin
     });
 
     const toggle = (id: string) => {
+        playSound('ui_click');
         const comboToToggle = displayableCombinations.find(c => c.id === id);
         if (!comboToToggle) return;
 
@@ -66,6 +71,7 @@ export const CombinationControls: React.FC<CombinationControlsProps> = ({ combin
     };
 
     const handleConfirm = () => {
+        playSound('ui_click');
         if (phase === 'DECLARE') {
             const selected = displayableCombinations.filter(c => selectedIds.has(c.id));
             onDeclare(selected);
@@ -127,7 +133,7 @@ export const CombinationControls: React.FC<CombinationControlsProps> = ({ combin
                         ))}
                     </div>
                     <div className="p-6 pt-2 bg-[#151012]">
-                        <button onClick={() => onDeclare([])} className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg shadow-[0_4px_20px_rgba(37,99,235,0.4)] transition-all active:scale-[0.98] border border-white/10">
+                        <button onClick={() => { playSound('ui_click'); onDeclare([]); }} className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg shadow-[0_4px_20px_rgba(37,99,235,0.4)] transition-all active:scale-[0.98] border border-white/10">
                             Continue Game
                         </button>
                     </div>
@@ -264,7 +270,7 @@ export const CombinationControls: React.FC<CombinationControlsProps> = ({ combin
                 </div>
 
                 <div className="p-6 bg-slate-900 border-t border-white/10 flex gap-4 shrink-0">
-                    <button onClick={() => onDeclare([])} className="btn-base flex-1 py-3.5 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
+                    <button onClick={() => { playSound('ui_click'); onDeclare([]); }} className="btn-base flex-1 py-3.5 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
                         Pass (No Declare)
                     </button>
                     <button onClick={handleConfirm} className="btn-base flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold py-3.5 rounded-xl shadow-lg hover:shadow-xl border border-emerald-400/30 flex items-center justify-center gap-2">

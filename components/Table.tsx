@@ -174,11 +174,12 @@ export const Table: React.FC<TableProps> = ({
   const handleMobileCardClick = useCallback((card: Card, isPlayable: boolean) => {
     if (!isPlayable) {
         triggerHaptic('error');
+        playSound('ui_error');
         return;
     }
     triggerHaptic('light');
     onPlayCard(card);
-  }, [onPlayCard, triggerHaptic]);
+  }, [onPlayCard, triggerHaptic, playSound]);
 
   const handleBackgroundClick = useCallback((e: React.MouseEvent) => {
       if (e.target === e.currentTarget) setSelectedMobileCardId(null);
@@ -419,7 +420,11 @@ export const Table: React.FC<TableProps> = ({
                                         initial={phase === 'DISTRIBUTING' ? { x: -300, y: -200, opacity: 0 } : { x: -window.innerWidth / 2, y: window.innerHeight, opacity: 0 }}
                                         animate={{ x: translateX - 64, y: isHighlighted ? translateY - 40 : translateY, rotate: rotate, opacity: 1, scale: 1, transition: transitionConfig }}
                                         onClick={() => {
-                                            if (!isPlayable) { triggerHaptic('error'); return; }
+                                            if (!isPlayable) { 
+                                                triggerHaptic('error'); 
+                                                playSound('ui_error');
+                                                return; 
+                                            }
                                             onPlayCard(card);
                                         }}
                                         exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }} 
@@ -481,11 +486,11 @@ export const Table: React.FC<TableProps> = ({
             </div>
 
             {showDeclarationModal && onDeclareCombinations && heroCombinations && (
-                <CombinationControls phase="DECLARE" combinations={heroCombinations} onDeclare={onDeclareCombinations} timeLeft={timeLeft} />
+                <CombinationControls phase="DECLARE" combinations={heroCombinations} onDeclare={onDeclareCombinations} timeLeft={timeLeft} soundEnabled={settings.soundEnabled} />
             )}
 
             {viewingDeclarationsPlayerId && (
-                <CombinationControls phase="SHOW" combinations={players[viewingDeclarationsPlayerId].declaredCombinations} onDeclare={() => setViewingDeclarationsPlayerId(null)} revealOwner={viewingDeclarationsPlayerId} />
+                <CombinationControls phase="SHOW" combinations={players[viewingDeclarationsPlayerId].declaredCombinations} onDeclare={() => setViewingDeclarationsPlayerId(null)} revealOwner={viewingDeclarationsPlayerId} soundEnabled={settings.soundEnabled} />
             )}
         </main>
 

@@ -39,7 +39,7 @@ export interface TrickCard {
   playerId: 'hero' | 'opponent';
 }
 
-export type ContractStatus = 'NORMAL' | 'DEDANS' | 'CAPOT';
+export type ContractStatus = 'NORMAL' | 'DEDANS' | 'CAPOT' | 'LITIGE';
 export type ContractType = 'TRUMP' | 'NO_TRUMP';
 
 export interface ScoreBreakdown {
@@ -64,8 +64,9 @@ export interface LastRoundData {
         bidTaker: 'hero' | 'opponent';
         status: ContractStatus;
         contractType: ContractType;
-        winnerId: 'hero' | 'opponent';
-    }
+        winnerId: 'hero' | 'opponent' | 'none';
+    };
+    litigePoints?: number; // Points to be carried over
 }
 
 export interface RoundResult {
@@ -73,7 +74,7 @@ export interface RoundResult {
   heroScore: number;
   opponentScore: number;
   trump: Suit | null;
-  winner: 'hero' | 'opponent' | 'draw';
+  winner: 'hero' | 'opponent' | 'draw' | 'none';
   contractStatus: ContractStatus;
   bidTaker: 'hero' | 'opponent';
   contractType: ContractType;
@@ -89,6 +90,7 @@ export interface Notification {
 }
 
 export type Difficulty = 'beginner' | 'intermediate' | 'expert';
+export type TieResolution = 'defender_wins' | 'litige' | 'taker_wins';
 
 export interface GameSettings {
   gameSpeed: 'slow' | 'normal' | 'fast';
@@ -99,6 +101,7 @@ export interface GameSettings {
   animationsEnabled: boolean;
   difficulty: Difficulty;
   targetScore: number; // 51, 101, 201, 501
+  tieResolution: TieResolution;
 }
 
 export interface GameState {
@@ -117,10 +120,12 @@ export interface GameState {
   dealerId: 'hero' | 'opponent';
   bidTaker: 'hero' | 'opponent' | null; // Who took the bid
   bidRound: 1 | 2; // Round 1: Take candidate? Round 2: Choose any suit
+  playerChoice: 'kept' | 'rejected' | null; // Track explicit choice about candidate card
   declarations: string[]; // Log of game events
   gameTarget: number; // e.g. 501
   trickCount: number; // 1-9
   roundHistory: RoundResult[];
   lastRoundBreakdown?: LastRoundData;
   a11yAnnouncement: string; // Text for screen readers
+  carriedOverPoints: number; // For Litige
 }

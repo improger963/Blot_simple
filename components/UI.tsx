@@ -1,6 +1,7 @@
 
+
 import React, { useEffect, useState, memo, useRef, useCallback } from 'react';
-import { GameSettings, Player, RoundResult } from '../types';
+import { GameSettings, Player, RoundResult, TieResolution } from '../types';
 import { SUIT_SYMBOLS } from '../constants';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { Z_INDEX } from '../utils/uiLogic';
@@ -15,7 +16,7 @@ export const Icons = {
     Info: memo(() => <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
     Close: memo(() => <svg className="w-5 h-5 text-slate-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>),
     Coin: memo(() => <svg className="w-4 h-4 text-gold" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" /></svg>),
-    Trophy: memo(() => <svg className="w-6 h-6 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
+    Trophy: memo(() => <svg className="w-3.5 h-3.5 text-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
     ChevronDown: memo(() => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>),
     Settings: memo(() => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>),
     Menu: memo(() => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>),
@@ -46,7 +47,7 @@ export const CountUp: React.FC<{ value: number, duration?: number, className?: s
         };
         animationFrameId = window.requestAnimationFrame(step);
         return () => window.cancelAnimationFrame(animationFrameId);
-    }, [value, duration]); // Removed displayValue from dep array to avoid restart on re-render
+    }, [value, duration]); 
 
     return <span className={className}>{displayValue}</span>;
 });
@@ -266,7 +267,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
 
         animationFrameId = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(animationFrameId);
-    }, [isActive, playSound]); // Removed timer from dep array
+    }, [isActive, playSound]);
 
     useEffect(() => {
         if (player.roundScore !== lastScore) {
@@ -308,14 +309,21 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
     const strokeWidth = 5;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (timer / TOTAL_TIME) * circumference;
+    
+    // Position Logic (Responsive): 
+    // Hero: Bottom Left (but pushed up to clear cards on mobile)
+    // Opponent: Top Right (pushed down to clear buttons on mobile)
+    const positionClasses = isHero 
+        ? 'bottom-[230px] left-1 md:bottom-12 md:left-12 origin-bottom-left' 
+        : 'top-[60px] right-1 md:top-12 md:right-12 origin-top-right';
+
+    // Bubble Direction
     const bubblePos: BubblePosition = isHero ? 'top-right' : 'bottom-left';
 
     return (
         <motion.div 
-            className={`
-                absolute z-[${Z_INDEX.PLAYER_AVATARS}] transition-all duration-300 scale-75 md:scale-100
-                ${isHero ? 'bottom-24 left-2 md:bottom-20 md:left-8 origin-left' : 'top-20 right-2 md:top-24 md:right-8 origin-right'}
-            `}
+            className={`absolute transition-all duration-300 scale-75 md:scale-100 ${positionClasses}`}
+            style={{ zIndex: Z_INDEX.PLAYER_AVATARS }}
             initial={{ x: isHero ? -100 : 100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ type: 'spring', damping: 20 }}
@@ -325,17 +333,23 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
                 <AnimatePresence>
                     {scoreFeedback && <FloatingFeedback text={scoreFeedback} color={isHero ? '#34d399' : '#f43f5e'} onComplete={() => setScoreFeedback(null)} />}
                 </AnimatePresence>
+                
                 <ActionBubble text={actionText || ''} isVisible={!!actionText} variant={actionVariant} position={bubblePos} />
 
+                {/* Main Avatar Circle */}
                 <div className="relative w-28 h-28 flex items-center justify-center">
                     {isActive && isUrgent && <div className="absolute inset-0 bg-red-500/20 rounded-full blur-xl animate-pulse" />}
+                    
+                    {/* Timer Ring SVG */}
                     <svg className="w-full h-full -rotate-90 drop-shadow-2xl overflow-visible">
                         <defs>
                             <linearGradient id="heroTimer" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#22d3ee" /><stop offset="100%" stopColor="#3b82f6" /></linearGradient>
                             <linearGradient id="oppTimer" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#fbbf24" /><stop offset="100%" stopColor="#f43f5e" /></linearGradient>
                             <linearGradient id="urgentTimer" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#ef4444" /><stop offset="100%" stopColor="#b91c1c" /></linearGradient>
                         </defs>
+                        {/* Background Ring */}
                         <circle cx="50%" cy="50%" r={radius} fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={strokeWidth} />
+                        {/* Active Timer Ring */}
                         {isActive && (
                             <motion.circle 
                                 cx="50%" cy="50%" r={radius} fill="none" 
@@ -347,6 +361,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
                         )}
                     </svg>
 
+                    {/* Numeric Countdown */}
                     <AnimatePresence>
                         {isActive && (
                             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className={`absolute -bottom-2 font-mono font-bold text-xs px-2 py-0.5 rounded-full border shadow-lg z-20 ${isUrgent ? 'bg-red-600 border-red-400 text-white animate-pulse' : 'bg-slate-900 border-slate-700 text-slate-300'}`}>
@@ -355,12 +370,14 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
                         )}
                     </AnimatePresence>
 
-                    <div className="absolute inset-3 rounded-full overflow-hidden border-4 border-slate-800 bg-slate-900 shadow-inner flex items-center justify-center">
+                    {/* Avatar Image with enhanced Activity Glow */}
+                    <div className={`absolute inset-3 rounded-full overflow-hidden border-4 ${isActive ? (isHero ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]' : 'border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.6)]') : 'border-slate-800'} bg-slate-900 shadow-inner flex items-center justify-center transition-all duration-300`}>
                          <div className={`absolute inset-0 bg-gradient-to-br ${isHero ? 'from-blue-600 to-indigo-900' : 'from-rose-600 to-red-900'} opacity-80`} />
                          <span className="relative text-3xl font-black text-white/90 drop-shadow-md z-10">{isHero ? '😎' : '🤖'}</span>
                          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none" />
                     </div>
 
+                    {/* Declaration Button (if needed) */}
                     {hasDeclarations && (
                         <motion.button 
                             initial={{ scale: 0 }} animate={{ scale: 1 }} whileHover={{ scale: 1.1 }} onClick={onViewDeclarations}
@@ -371,26 +388,42 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
                     )}
                 </div>
 
-                <div className={`absolute top-1/2 -translate-y-1/2 space-y-1.5 w-max ${isHero ? 'left-full ml-3' : 'right-full mr-3 flex flex-col items-end'}`}>
+                {/* Name & Scores Block */}
+                <div className={`absolute top-1/2 -translate-y-1/2 space-y-1.5 w-max ${isHero ? 'left-full ml-4' : 'right-full mr-4 flex flex-col items-end'}`}>
+                    
+                    {/* Status Badges */}
                     <div className={`flex gap-1 mb-1 ${isRight ? 'justify-end' : ''}`}>
                         {isDealer && <span className="bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded uppercase shadow-sm border border-amber-300">Dealer</span>}
                         {isActive && <motion.span initial={{ opacity: 0, x: isRight ? 5 : -5 }} animate={{ opacity: 1, x: 0 }} className={`text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase shadow-sm border border-white/20 ${isHero ? 'bg-emerald-600' : 'bg-rose-600'}`}>{isHero ? 'Your Turn' : 'Thinking...'}</motion.span>}
                     </div>
+                    
+                    {/* Name Label */}
                     <motion.div className="glass-panel px-3 py-1.5 rounded-full inline-flex items-center gap-2 border border-white/10" whileHover={{ scale: 1.05 }}>
                         <span className="text-xs font-bold text-slate-200 tracking-wide truncate max-w-[100px]">{player.name}</span>
                     </motion.div>
-                    <div className={`flex gap-2 ${isRight ? 'justify-end' : ''}`}>
-                         <motion.div className="bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5">
+                    
+                    {/* Scores Row: Total & Round */}
+                    <div className={`flex items-center gap-2 ${isRight ? 'justify-end' : ''}`}>
+                        {/* Total Score (Persistent) */}
+                         <motion.div className="bg-slate-900/80 border border-white/10 px-2 py-1 rounded-md flex items-center gap-1.5 shadow-sm" title="Total Game Score">
+                            <Icons.Trophy />
+                            <CountUp value={player.score} className="text-xs font-bold text-gold font-mono" />
+                         </motion.div>
+
+                        {/* Round Score (Transient) */}
+                         <motion.div className="bg-gradient-to-r from-amber-500 to-amber-600 px-2 py-1 rounded-md shadow-lg flex items-center gap-1.5" title="Current Round Score">
                             <Icons.Coin />
                             <CountUp value={player.roundScore} className="text-xs font-bold text-white font-mono" />
                          </motion.div>
-                         {player.capturedCards.length > 0 && (
-                             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="bg-slate-700/80 px-2 py-1 rounded-full flex items-center gap-1">
-                                 <span className="text-[10px]">🃏</span>
-                                 <span className="text-[10px] font-bold text-white">{player.capturedCards.length}</span>
-                             </motion.div>
-                         )}
                     </div>
+
+                    {/* Captured Cards Indicator */}
+                    {player.capturedCards.length > 0 && (
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className={`bg-slate-700/80 px-2 py-0.5 rounded-full flex items-center gap-1 mt-0.5 ${isRight ? 'self-end' : 'self-start'}`}>
+                            <span className="text-[10px]">🃏</span>
+                            <span className="text-[10px] font-bold text-white">{player.capturedCards.length}</span>
+                        </motion.div>
+                    )}
                 </div>
             </div>
         </motion.div>
@@ -399,7 +432,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = memo(({ player, positio
 
 export const ScoreBoard: React.FC<{ heroScore: number; oppScore: number; target: number; round: number }> = memo(({ heroScore, oppScore, target, round }) => {
     return (
-        <div className={`absolute top-4 left-4 md:left-8 z-[${Z_INDEX.SCOREBOARD}] hidden md:flex flex-col gap-2`}>
+        <div className="absolute top-4 left-4 md:left-8 hidden md:flex flex-col gap-2" style={{ zIndex: Z_INDEX.SCOREBOARD }}>
              <div className="glass-panel p-4 rounded-2xl border border-white/10 shadow-xl min-w-[200px]">
                 <div className="flex justify-between items-center mb-3 border-b border-white/10 pb-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Round {round}</span>
@@ -453,8 +486,8 @@ const Sheet: React.FC<SheetProps> = ({ isOpen, onClose, children, direction = 'b
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[${Z_INDEX.MODALS_BACKDROP}]`} />
-                    <motion.div variants={variants} initial="hidden" animate="visible" exit="exit" drag={isBottom ? 'y' : false} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={0.2} onDragEnd={(e, { offset }) => { if (isBottom && offset.y > 100) onClose(); }} className={`fixed left-0 right-0 z-[${Z_INDEX.MODALS_CONTENT}] ${isBottom ? 'bottom-0 rounded-t-3xl pb-safe' : 'top-0 rounded-b-3xl pt-safe'} bg-[#151012] border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] max-h-[85vh] flex flex-col`}>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm" style={{ zIndex: Z_INDEX.MODALS_BACKDROP }} />
+                    <motion.div variants={variants} initial="hidden" animate="visible" exit="exit" drag={isBottom ? 'y' : false} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={0.2} onDragEnd={(e, { offset }) => { if (isBottom && offset.y > 100) onClose(); }} className={`fixed left-0 right-0 ${isBottom ? 'bottom-0 rounded-t-3xl pb-safe' : 'top-0 rounded-b-3xl pt-safe'} bg-[#151012] border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] max-h-[85vh] flex flex-col`} style={{ zIndex: Z_INDEX.MODALS_CONTENT }}>
                         {isBottom && <div className="w-full flex justify-center py-3" onClick={onClose}><div className="w-12 h-1.5 bg-white/20 rounded-full" /></div>}
                         <div className="flex-1 overflow-y-auto custom-scrollbar">{children}</div>
                     </motion.div>
@@ -474,6 +507,7 @@ export const SettingsModal: React.FC<{
     const setDifficulty = useCallback((d: GameSettings['difficulty']) => onUpdate({ ...settings, difficulty: d }), [settings, onUpdate]);
     const setSpeed = useCallback((s: GameSettings['gameSpeed']) => onUpdate({ ...settings, gameSpeed: s }), [settings, onUpdate]);
     const setTarget = useCallback((t: number) => onUpdate({ ...settings, targetScore: t }), [settings, onUpdate]);
+    const setTieResolution = useCallback((tr: TieResolution) => onUpdate({ ...settings, tieResolution: tr }), [settings, onUpdate]);
 
     return (
         <Sheet isOpen={true} onClose={onClose} direction="top">
@@ -486,6 +520,23 @@ export const SettingsModal: React.FC<{
                              {[51, 101, 201, 501].map(t => (
                                  <button key={t} onClick={() => setTarget(t)} className={`flex-1 py-3 rounded-md text-xs font-bold uppercase transition-all ${settings.targetScore === t ? 'bg-amber-500 text-black shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{t}</button>
                              ))}
+                         </div>
+                     </div>
+                     <div>
+                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Tie / Litige Resolution</label>
+                         <div className="flex bg-slate-800 rounded-lg p-1 border border-white/5 flex-col gap-1">
+                             <button onClick={() => setTieResolution('litige')} className={`w-full py-2 rounded-md text-xs font-bold uppercase transition-all flex items-center justify-between px-4 ${settings.tieResolution === 'litige' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+                                 <span>Standard Litige</span>
+                                 <span className="text-[9px] opacity-70 normal-case">Points carry over</span>
+                             </button>
+                             <button onClick={() => setTieResolution('defender_wins')} className={`w-full py-2 rounded-md text-xs font-bold uppercase transition-all flex items-center justify-between px-4 ${settings.tieResolution === 'defender_wins' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+                                 <span>Defender Wins</span>
+                                 <span className="text-[9px] opacity-70 normal-case">Taker loses (Dedans)</span>
+                             </button>
+                             <button onClick={() => setTieResolution('taker_wins')} className={`w-full py-2 rounded-md text-xs font-bold uppercase transition-all flex items-center justify-between px-4 ${settings.tieResolution === 'taker_wins' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>
+                                 <span>Taker Wins</span>
+                                 <span className="text-[9px] opacity-70 normal-case">Taker wins contract</span>
+                             </button>
                          </div>
                      </div>
                      <div><label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Difficulty</label><div className="flex bg-slate-800 rounded-lg p-1 border border-white/5">{(['beginner', 'intermediate', 'expert'] as const).map(d => (<button key={d} onClick={() => setDifficulty(d)} className={`flex-1 py-3 rounded-md text-xs font-bold uppercase transition-all ${settings.difficulty === d ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>{d}</button>))}</div></div>
@@ -514,7 +565,7 @@ export const HistoryPanel: React.FC<{ isOpen: boolean; onClose: () => void; hist
             <div className="p-4 space-y-3 pb-8">
                 {history.length === 0 ? <div className="text-center text-slate-500 mt-10 text-sm py-10">No rounds played yet.</div> : history.map((round, i) => (
                     <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/5 flex flex-col gap-2">
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2"><span className="text-xs font-bold text-slate-400 uppercase">Round {round.roundNumber}</span><span className={`text-xs font-bold px-2 py-0.5 rounded ${round.winner === 'hero' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-rose-900/50 text-rose-400'}`}>{round.winner === 'hero' ? 'WON' : 'LOST'}</span></div>
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2"><span className="text-xs font-bold text-slate-400 uppercase">Round {round.roundNumber}</span><span className={`text-xs font-bold px-2 py-0.5 rounded ${round.winner === 'hero' ? 'bg-emerald-900/50 text-emerald-400' : (round.winner === 'opponent' ? 'bg-rose-900/50 text-rose-400' : 'bg-slate-700 text-slate-300')}`}>{round.winner === 'hero' ? 'WON' : (round.winner === 'opponent' ? 'LOST' : 'LITIGE')}</span></div>
                         <div className="flex justify-between items-end">
                             <div className="flex flex-col"><span className="text-[10px] text-slate-500 uppercase">Score</span><span className="text-xl font-mono text-white tracking-tight"><span className="text-emerald-400">{round.heroScore}</span> - <span className="text-rose-400">{round.opponentScore}</span></span></div>
                             <div className="flex flex-col items-end">
